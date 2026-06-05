@@ -1,194 +1,73 @@
 # Taghag Handover
 
-This is the short continuation note for the next agent working on Taghag. It
-connects the two repositories, the master implementation plan, and the ordered
-prompt library.
+This note is for the next AI agent taking over the Taghag repository with no prior context.
 
-## Repositories
+## Project Intent
 
-Primary implementation repo:
+Taghag is a clean-room, MP3-only, metadata-only private DJ app. The durable plan is in `docs/TAGHAG_MASTER_IMPLEMENTATION_PLAN.md`. Execution is broken into ordered prompts under `.github/prompts/`, from repo layout through migration, importer, web shell, tests, clean-room audit, verification, and definition of done.
 
-- `/Users/g/Projects/taghag`
-- GitHub: `tagslut-org/taghag`
-- Purpose: clean-room, MP3-only, metadata-only private DJ app.
+## What Has Been Implemented
 
-Reference/source-context repo:
+Completed work aligns partially with prompts `03`, `04`, `06`, and `07`, but not yet with `01` and `02`.
 
-- `/Users/g/Projects/tagslut`
-- GitHub: `tagslut-org/tagslut`
-- Purpose in this work: historical context and source of a few proven standalone
-  utilities, not an architecture to copy.
+- Prompt library and master plan are present under `docs/` and `.github/prompts/`.
+- A Python importer package exists in `tools/taghag_import/`.
+- Implemented importer pieces:
+  - MP3 discovery in `tools/taghag_import/discover.py`
+  - ID3 tag extraction in `tools/taghag_import/tags.py`
+  - local JSONL receipt read/write in `tools/taghag_import/receipt.py`
+  - optional Postman evidence parsing in `tools/taghag_import/postman_evidence.py`
+  - PostgREST upload client in `tools/taghag_import/db_client.py`
+  - CLI entrypoints in `tools/taghag_import/cli.py`
+- Extracted clean-room utilities exist:
+  - genre normalization via `tools/taghag_import/genre.py`
+  - provider evidence parsing via `tools/taghag_import/postman_evidence.py`
+- A first React/Vite shell exists in `web/` with a placeholder UI in `web/src/App.tsx`.
+- Basic Python tests exist and currently pass:
+  - `tools/tests/test_genre.py`
+  - `tools/tests/test_postman_evidence.py`
+  - `pytest tools/tests -q` currently reports `5 passed`
+- Contributor guidance now exists in `AGENTS.md`.
 
-The tagslut-side context matters because it explains the failure modes Taghag is
-designed to avoid: mixed-format drift, schema overreach, unsafe identity merges,
-and metadata guessing. Taghag should inherit the lessons, not the schema.
+## Current Divergence From The Plan
 
-## Source Of Truth
+The highest-risk gap is that prompts `01` and `02` are not complete, and later work was built on top of the wrong schema nouns.
 
-Read these in order before implementing:
+- The repo still uses `database/`, not the preferred `supabase/` layout from prompt `01`.
+- The existing migration at `database/migrations/0001_initial_schema.sql` is not the target schema from prompt `02`.
+- The migration creates `mp3_track`, which the plan explicitly forbids; it must be `mp3_file`.
+- The migration models `dj_tag` as a tag dictionary, not per-file DJ metadata.
+- The migration does not create `mp3_observation`.
+- The importer currently uploads to `mp3_track`, matching the wrong schema.
+- The importer command shape does not yet match prompt `03` (`scan`/`load` exist; `import-batch` with receipt-first local workflow is not complete).
+- The web shell is placeholder-only and is not yet wired to generated Supabase database types from prompt `05`.
+
+## Recommended Read Order
 
 1. `AGENT.md`
 2. `README.md`
 3. `docs/TAGHAG_MASTER_IMPLEMENTATION_PLAN.md`
 4. `.github/prompts/README.md`
-5. The specific numbered prompt for the task you are executing
+5. `.github/prompts/taghag-01-repo-layout.prompt.md`
+6. `.github/prompts/taghag-02-first-migration.prompt.md`
+7. `.github/prompts/taghag-03-import-cli.prompt.md`
 
-The master plan is the durable implementation reference. The prompts are
-task-sized execution packets derived from that plan. If a prompt and the master
-plan disagree, prefer the master plan and update the prompt in the same patch.
+## Immediate Next Step
 
-## Prompt Library
+Do not extend the importer or UI first. The next agent should execute prompts `01` and `02` before building further.
 
-The prompt sequence is stored in `.github/prompts/`:
+Priority order:
 
-- `taghag-00-master-implementation-plan.prompt.md`
-- `taghag-01-repo-layout.prompt.md`
-- `taghag-02-first-migration.prompt.md`
-- `taghag-03-import-cli.prompt.md`
-- `taghag-04-postman-evidence.prompt.md`
-- `taghag-05-web-types-and-client.prompt.md`
-- `taghag-06-react-vite-ui-shell.prompt.md`
-- `taghag-07-tests.prompt.md`
-- `taghag-08-clean-room-audit.prompt.md`
-- `taghag-09-verification-checklist.prompt.md`
-- `taghag-10-definition-of-done.prompt.md`
+1. Rename `database/` to `supabase/` and update repo docs and references.
+2. Replace `0001_initial_schema.sql` with the correct 9-table MP3 metadata schema centered on `mp3_file`.
+3. Update the importer code to target `mp3_file`, `mp3_observation`, `dj_tag`, `quality_check`, and `tag_evidence` using the receipt-first flow from prompt `03`.
 
-Use the prompts in order unless the operator explicitly redirects the work. Each
-implementation phase should leave the repo in a tested, committed, pushed state.
-
-## Current Architectural Decision
-
-Taghag v1 is MP3-only.
-
-The database stores metadata about local MP3 files. It must not store audio
-files, cloud object paths, Supabase Storage objects, or upload locations.
-
-`mp3_file` is the primary asset table. ISRC is useful evidence for lookup and
-duplicate detection, but it is not identity and must not automatically merge
-rows in v1.
-
-## Clean-Room Boundary
-
-Allowed from tagslut:
-
-- Extracted genre normalization behavior.
-- Extracted Postman `[Tag Evidence JSON]` parser behavior.
-- The DJ-facing tag contract: label, canonical genre/subgenre, release context,
-  evidence status, and quality status.
-- The operational rule that uncertainty should be skipped/reported rather than
-  guessed.
-- The rule that MP3 comments are reserved for Mixed in Key Energy.
-
-Forbidden in active Taghag code and migrations:
-
-- `from tagslut`
-- `import tagslut`
-- `asset_file`
-- `track_identity`
-- `asset_link`
-- `preferred_asset`
-- `move_plan`
-- `move_execution`
-- `provenance_event`
-- `AAC_LIBRARY`
-- `M4A derivative`
-- `AAC-first`
-
-These terms may appear only in docs sections explicitly marked as historical or
-forbidden, and the clean-room audit should become the authoritative gate.
-
-## Known State To Fix First
-
-The current repo may still contain an early migration under
-`database/migrations/0001_initial_schema.sql`. That migration is not the target
-schema if it creates `mp3_track`, models `dj_tag` as a tag dictionary, omits
-`mp3_observation`, or grants authenticated broad CRUD on every table.
-
-The next agent should treat this as the first implementation priority:
-
-1. Run `taghag-01-repo-layout.prompt.md`.
-2. Rename `database/` to `supabase/` unless there is a concrete tool reason not
-   to.
-3. Update README and prompt references to the chosen migration path.
-4. Run `taghag-02-first-migration.prompt.md`.
-5. Replace the bad initial migration with the 9-table MP3 metadata schema.
-
-Because this project is still early, prefer replacing the incorrect initial
-migration over stacking a corrective migration on top of wrong nouns.
-
-## Immediate Next Steps
-
-Start in `/Users/g/Projects/taghag`:
+## Quick Reality Check Commands
 
 ```bash
 git status --short
-sed -n '1,220p' AGENT.md
-sed -n '1,220p' README.md
-sed -n '1,220p' docs/TAGHAG_MASTER_IMPLEMENTATION_PLAN.md
+pytest tools/tests -q
+sed -n '1,220p' database/migrations/0001_initial_schema.sql
 sed -n '1,220p' .github/prompts/taghag-01-repo-layout.prompt.md
 sed -n '1,260p' .github/prompts/taghag-02-first-migration.prompt.md
 ```
-
-Then execute from the repo root:
-
-```bash
-supabase --version
-supabase db reset
-pytest tools/tests
-```
-
-If already running from `tools/`, use:
-
-```bash
-pytest tests
-```
-
-If `supabase db reset` fails because the current schema is wrong, that is
-expected until the layout and migration prompts are implemented. Do not build
-the importer or web UI on top of the wrong migration.
-
-## Verification Principles
-
-Use `python tools/audit_cleanroom.py` as the final forbidden-term gate once it
-exists. Raw `rg` checks are useful diagnostics, but they will find forbidden
-terms in prompt warning text.
-
-After the migration phase, verify:
-
-- Exactly the 9 required app tables exist.
-- `mp3_file` exists.
-- `mp3_track` does not exist.
-- RLS is enabled on every public app table.
-- No anon policies exist.
-- Grants are explicit.
-- No storage/upload path concepts exist.
-- ISRC is not unique.
-
-After importer work, verify:
-
-- Same batch does not duplicate `mp3_file`.
-- Re-running a batch creates new `mp3_observation` rows.
-- Out-of-scope audio files are counted and reported.
-- Missing metadata creates quality issue codes.
-- Receipt JSONL exists even if Supabase upload fails.
-- Optional Postman evidence never blocks MP3 import.
-
-After web work, verify:
-
-- The web app imports generated Supabase `Database` types.
-- No service-role or secret key appears under `web/`.
-- Empty states render cleanly.
-- UI code does not create or mutate schema.
-
-## Communication
-
-There is a Codex on the tagslut side that can answer context questions through
-the operator. Use that path for intent questions like:
-
-- Why is ISRC not identity?
-- Which tagslut utility was extracted and why?
-- What does the Postman evidence marker mean?
-- Which legacy schema concepts must stay out of Taghag?
-
-Do not guess across the boundary. Ask, then continue with the clean-room rule:
-Taghag gets the lesson, not the old system.

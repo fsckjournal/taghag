@@ -1,0 +1,15 @@
+.DS_Store
+.env
+.env.local
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+node_modules/
+dist/
+coverage/
+receipts/

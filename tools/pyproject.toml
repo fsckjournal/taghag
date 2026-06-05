@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "taghag-import"
+version = "0.1.0"
+description = "MP3-only import tooling for Taghag"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+  "mutagen>=1.47.0",
+]
+
+[project.scripts]
+taghag-import = "taghag_import.cli:main"
+
+[tool.setuptools]
+include-package-data = true
+
+[tool.setuptools.packages.find]
+where = ["."]
+
+[tool.setuptools.package-data]
+taghag_import = ["genre_rules.json"]

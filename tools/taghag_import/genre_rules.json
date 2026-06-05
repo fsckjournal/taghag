@@ -1,0 +1,24 @@
+{
+  "rules": [
+    {
+      "name": "House",
+      "family": "Electronic",
+      "aliases": ["house", "deep house", "tech house", "jackin house"]
+    },
+    {
+      "name": "Techno",
+      "family": "Electronic",
+      "aliases": ["techno", "dub techno", "minimal techno", "peak time techno"]
+    },
+    {
+      "name": "Disco",
+      "family": "Dance",
+      "aliases": ["disco", "nu disco", "boogie"]
+    },
+    {
+      "name": "Hip-Hop",
+      "family": "Urban",
+      "aliases": ["hip-hop", "hip hop", "rap", "instrumental hip hop"]
+    }
+  ]
+}

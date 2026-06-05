@@ -16,6 +16,7 @@ APP_TABLES = (
     "saved_view",
 )
 
+# cleanroom-audit: allow-start
 FORBIDDEN_SCHEMA_TERMS = (
     "mp3_track",
     "asset_file",
@@ -29,6 +30,7 @@ FORBIDDEN_SCHEMA_TERMS = (
     "M4A derivative",
     "AAC-first",
 )
+# cleanroom-audit: allow-end
 
 FORBIDDEN_STORAGE_TERMS = (
     "storage",

@@ -63,20 +63,30 @@ Example:
 
 ```bash
 cd tools && python3 -m venv .venv && source .venv/bin/activate && pip install -e .
-cd ../web && npm install
+pytest tests
+cd ../web && npm install && npm run build
 ```
 
 ## First import flow
 
-1. Scan a local MP3 tree and write a JSONL receipt:
+Scan a local MP3 tree, write a JSONL receipt, and skip upload:
 
 ```bash
-taghag-import scan --root /path/to/mp3-library --out ./receipts/first-import.jsonl
+cd tools
+taghag-import import-batch --root /path/to/mp3-library --run-name first-import --no-upload
 ```
 
-2. Review the JSONL receipt locally.
-3. Load the receipt into the database with server-side credentials in the environment:
+Upload uses the server-side Taghag env vars from [.env.example](/Users/g/Projects/taghag/.env.example):
 
 ```bash
-taghag-import load --receipt ./receipts/first-import.jsonl
+taghag-import import-batch --root /path/to/mp3-library --run-name first-import
+```
+
+## Verification
+
+```bash
+python tools/audit_cleanroom.py
+pytest tools/tests -q
+supabase db reset
+cd web && npm run build
 ```

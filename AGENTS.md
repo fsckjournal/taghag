@@ -9,8 +9,9 @@
 - `cd web && npm run preview`: serve the built frontend locally.
 - `cd tools && python3 -m venv .venv && source .venv/bin/activate && pip install -e .`: set up the importer environment.
 - `cd tools && pytest`: run the Python test suite.
-- `cd tools && taghag-import scan --root /path/to/mp3-library --out ./receipts/run.jsonl`: scan a local MP3 tree.
-- `cd tools && taghag-import load --receipt ./receipts/run.jsonl`: load a receipt into the database.
+- `python tools/audit_cleanroom.py`: fail if active code or migrations use forbidden legacy Tagslut terms.
+- `cd tools && taghag-import import-batch --root /path/to/mp3-library --run-name batch --no-upload`: scan a local MP3 tree and write a receipt.
+- `cd tools && taghag-import import-batch --root /path/to/mp3-library --run-name batch`: scan and upload with server-side env vars.
 
 ## Coding Style & Naming Conventions
 Use TypeScript with ES modules in `web/` and Python 3.11+ in `tools/`. Follow the existing style: 2-space indentation in TSX, 4-space indentation in Python, double quotes in frontend code, and explicit type hints in Python. Keep React components in PascalCase (`App.tsx`), Python modules in snake_case (`postman_evidence.py`), and SQL migrations timestamp-prefixed (`20260606000000_initial_mp3_metadata_schema.sql`).

@@ -8,7 +8,7 @@ Taghag is a clean-room, MP3-only, metadata-only private DJ app. The durable plan
 
 ## What Has Been Implemented
 
-Completed work aligns partially with prompts `03`, `04`, `06`, and `07`, but not yet with `01` and `02`.
+Completed work aligns partially with prompts `01`, `03`, `04`, `06`, and `07`, but not yet with `02`.
 
 - Prompt library and master plan are present under `docs/` and `.github/prompts/`.
 - A Python importer package exists in `tools/taghag_import/`.
@@ -31,10 +31,10 @@ Completed work aligns partially with prompts `03`, `04`, `06`, and `07`, but not
 
 ## Current Divergence From The Plan
 
-The highest-risk gap is that prompts `01` and `02` are not complete, and later work was built on top of the wrong schema nouns.
+The highest-risk gap is that prompt `02` is not complete, and later work was built on top of the wrong schema nouns.
 
-- The repo still uses `database/`, not the preferred `supabase/` layout from prompt `01`.
-- The existing migration at `database/migrations/0001_initial_schema.sql` is not the target schema from prompt `02`.
+- The repo uses the preferred `supabase/` layout from prompt `01`.
+- The existing migration under `supabase/migrations/` is not yet the target schema from prompt `02`.
 - The migration creates `mp3_track`, which the plan explicitly forbids; it must be `mp3_file`.
 - The migration models `dj_tag` as a tag dictionary, not per-file DJ metadata.
 - The migration does not create `mp3_observation`.
@@ -58,16 +58,16 @@ Do not extend the importer or UI first. The next agent should execute prompts `0
 
 Priority order:
 
-1. Rename `database/` to `supabase/` and update repo docs and references.
-2. Replace `0001_initial_schema.sql` with the correct 9-table MP3 metadata schema centered on `mp3_file`.
-3. Update the importer code to target `mp3_file`, `mp3_observation`, `dj_tag`, `quality_check`, and `tag_evidence` using the receipt-first flow from prompt `03`.
+1. Replace the current migration with the correct 9-table MP3 metadata schema centered on `mp3_file`.
+2. Update the importer code to target `mp3_file`, `mp3_observation`, `dj_tag`, `quality_check`, and `tag_evidence` using the receipt-first flow from prompt `03`.
+3. Wire generated Supabase types into the web shell after the schema is valid.
 
 ## Quick Reality Check Commands
 
 ```bash
 git status --short
 pytest tools/tests -q
-sed -n '1,220p' database/migrations/0001_initial_schema.sql
+sed -n '1,220p' supabase/migrations/0001_initial_schema.sql
 sed -n '1,220p' .github/prompts/taghag-01-repo-layout.prompt.md
 sed -n '1,260p' .github/prompts/taghag-02-first-migration.prompt.md
 ```

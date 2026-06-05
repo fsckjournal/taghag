@@ -1,7 +1,7 @@
 # Repository Guidelines
 
 ## Project Structure & Module Organization
-`web/` contains the Vite + React frontend. Primary source files live in `web/src/`, while `web/dist/` is build output and should stay generated. `tools/` contains the standalone Python importer package `taghag_import`, with tests under `tools/tests/`. Database assets live in `database/`, especially `database/migrations/` for source-controlled schema changes and `database/seed.sql` for seed data. Reusable agent prompts live in `.github/prompts/`.
+`web/` contains the Vite + React frontend. Primary source files live in `web/src/`, while `web/dist/` is build output and should stay generated. `tools/` contains the standalone Python importer package `taghag_import`, with tests under `tools/tests/`. Supabase assets live in `supabase/`, especially `supabase/migrations/` for source-controlled schema changes and `supabase/seed.sql` for seed data. Reusable agent prompts live in `.github/prompts/`.
 
 ## Build, Test, and Development Commands
 - `cd web && npm install && npm run dev`: start the frontend locally with Vite.
@@ -13,7 +13,7 @@
 - `cd tools && taghag-import load --receipt ./receipts/run.jsonl`: load a receipt into the database.
 
 ## Coding Style & Naming Conventions
-Use TypeScript with ES modules in `web/` and Python 3.11+ in `tools/`. Follow the existing style: 2-space indentation in TSX, 4-space indentation in Python, double quotes in frontend code, and explicit type hints in Python. Keep React components in PascalCase (`App.tsx`), Python modules in snake_case (`postman_evidence.py`), and SQL migrations prefixed numerically (`0001_initial_schema.sql`).
+Use TypeScript with ES modules in `web/` and Python 3.11+ in `tools/`. Follow the existing style: 2-space indentation in TSX, 4-space indentation in Python, double quotes in frontend code, and explicit type hints in Python. Keep React components in PascalCase (`App.tsx`), Python modules in snake_case (`postman_evidence.py`), and SQL migrations timestamp-prefixed (`20260606000000_initial_mp3_metadata_schema.sql`).
 
 ## Testing Guidelines
 Python tests use `pytest` and live in `tools/tests/` as `test_*.py`. Mirror the module or behavior under test, and keep fixtures in `tools/tests/conftest.py` when shared. The frontend currently has no test runner configured, so at minimum run `npm run build` before submitting UI changes.
@@ -22,4 +22,4 @@ Python tests use `pytest` and live in `tools/tests/` as `test_*.py`. Mirror the 
 Recent history mixes imperative summaries and Conventional Commit prefixes such as `feat:`. Prefer short, imperative commit subjects, using prefixes when they add clarity. PRs should describe scope, call out migration or env changes, link related issues, and include screenshots for frontend work.
 
 ## Security & Configuration Tips
-Taghag is MP3-only and metadata-only: do not add logic that uploads or deletes local audio files. Keep server-side database credentials out of frontend code; only `VITE_` variables belong in `web/`. Put schema changes in `database/migrations/`, not ad hoc SQL notes.
+Taghag is MP3-only and metadata-only: do not add logic that uploads or deletes local audio files. Keep server-side database credentials out of frontend code; only `VITE_` variables belong in `web/`. Put schema changes in `supabase/migrations/`, not ad hoc SQL notes.

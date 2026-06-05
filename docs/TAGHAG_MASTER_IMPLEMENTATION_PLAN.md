@@ -108,7 +108,7 @@ Known existing work from previous agents:
 - Postman evidence parser should exist as
   `tools/taghag_import/postman_evidence.py`.
 - Tests should exist under `tools/tests/`.
-- A first migration may exist under `database/migrations/0001_initial_schema.sql`.
+- A first migration may exist under `supabase/migrations/0001_initial_schema.sql`.
 
 Known migration problem to watch for:
 
@@ -118,8 +118,7 @@ Known migration problem to watch for:
 - If `mp3_observation` is missing, the schema is incomplete.
 - If authenticated gets broad full CRUD on every table without scoped policies,
   tighten grants and policies.
-- If the layout uses `database/` instead of `supabase/`, prefer renaming to the
-  operator-requested `supabase/` layout unless a concrete tool reason exists.
+- The layout should use the operator-requested `supabase/` directory.
 
 ## 6. Implementation Order
 
@@ -167,9 +166,9 @@ taghag/
 Tasks:
 
 1. Inspect current layout.
-2. If `database/` exists and `supabase/` does not, rename `database/` to
-   `supabase/`.
-3. Update README references from `database/` to `supabase/`.
+2. Confirm `supabase/` exists and contains `config.toml`, `seed.sql`, and
+   `migrations/`.
+3. Update README references to `supabase/`.
 4. Keep `supabase/seed.sql` empty or harmless.
 5. Do not insert fake user-owned production rows in default seed data.
 6. If test seed data is needed, create test fixtures instead.
@@ -1280,8 +1279,8 @@ cd /Users/g/Projects/taghag
 rg "from tagslut|import tagslut" .
 rg "asset_file|track_identity|asset_link|preferred_asset|move_plan|move_execution|provenance_event|AAC_LIBRARY|M4A derivative|AAC-first" .
 rg "service_role|SERVICE_ROLE|SECRET_KEY" web
-rg "mp3_track" supabase database
-rg "storage|bucket|upload_path|object_path|object_id" supabase database
+rg "mp3_track" supabase
+rg "storage|bucket|upload_path|object_path|object_id" supabase
 ```
 
 Database acceptance:

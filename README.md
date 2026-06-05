@@ -16,7 +16,7 @@ Version 1 accepts `.mp3` files only. FLAC, AAC, M4A, ALAC, and other non-MP3 for
 
 ## Metadata-only database model
 
-The database stores import runs, MP3 track metadata, DJ tags, tag evidence, quality checks, crates, crate membership, and saved views. It does not store binary audio assets.
+The database stores import runs, MP3 file metadata, DJ tags, tag evidence, quality checks, crates, crate membership, and saved views. It does not store binary audio assets.
 
 ## Local files remain local
 
@@ -28,7 +28,7 @@ The importer reads server-side upload credentials from environment variables onl
 
 ## Source-controlled migrations
 
-All SQL changes belong in source-controlled migrations under [database/migrations](/Users/g/Projects/taghag/database/migrations).
+All SQL changes belong in source-controlled migrations under [supabase/migrations](/Users/g/Projects/taghag/supabase/migrations).
 
 ## Active docs
 
@@ -56,7 +56,7 @@ Example names:
 
 1. Create a Python virtual environment for the importer and install [tools/pyproject.toml](/Users/g/Projects/taghag/tools/pyproject.toml).
 2. Copy [.env.example](/Users/g/Projects/taghag/.env.example) to a local env file and fill in server-side values outside the frontend.
-3. Apply [database/migrations/0001_initial_schema.sql](/Users/g/Projects/taghag/database/migrations/0001_initial_schema.sql) to your Postgres or Supabase-backed project.
+3. Apply [supabase/migrations](/Users/g/Projects/taghag/supabase/migrations) to your local Supabase project.
 4. Install the frontend dependencies in [web/package.json](/Users/g/Projects/taghag/web/package.json).
 
 Example:

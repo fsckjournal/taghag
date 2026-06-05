@@ -129,12 +129,18 @@ sed -n '1,220p' .github/prompts/taghag-01-repo-layout.prompt.md
 sed -n '1,260p' .github/prompts/taghag-02-first-migration.prompt.md
 ```
 
-Then execute:
+Then execute from the repo root:
 
 ```bash
 supabase --version
 supabase db reset
 pytest tools/tests
+```
+
+If already running from `tools/`, use:
+
+```bash
+pytest tests
 ```
 
 If `supabase db reset` fails because the current schema is wrong, that is
@@ -186,4 +192,3 @@ the operator. Use that path for intent questions like:
 
 Do not guess across the boundary. Ask, then continue with the clean-room rule:
 Taghag gets the lesson, not the old system.
-

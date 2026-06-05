@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from taghag_import.postman_evidence import (
+    evidence_to_row,
     parse_tag_evidence,
     resolve_tag_evidence,
 )
@@ -58,3 +59,40 @@ def test_resolve_error_result_returns_none() -> None:
 """.strip()
 
     assert resolve_tag_evidence(stdout) is None
+
+
+def test_parse_malformed_json_as_evidence_warning() -> None:
+    evidences = parse_tag_evidence("[Tag Evidence JSON] not json")
+
+    assert evidences == [{"status": "malformed", "raw_line": "[Tag Evidence JSON] not json"}]
+
+
+def test_evidence_to_row_preserves_raw_marker() -> None:
+    marker = {
+        "schema": "tagslut.postman.tag_evidence.v1",
+        "provider": "beatport",
+        "status": "matched",
+        "lookup_isrc": "USABC2400001",
+        "candidates": [
+            {
+                "provider_track_id": "123",
+                "field_candidates": [
+                    {
+                        "field_name": "canonical_label",
+                        "normalized_value": "Label",
+                        "confidence": 0.88,
+                    }
+                ],
+            }
+        ],
+    }
+
+    row = evidence_to_row(marker)
+
+    assert row["provider"] == "beatport"
+    assert row["lookup_type"] == "isrc"
+    assert row["lookup_key"] == "USABC2400001"
+    assert row["status"] == "matched"
+    assert row["confidence"] == 0.88
+    assert row["winning_fields_json"] == {"canonical_label": "Label"}
+    assert row["raw_marker_json"] == marker

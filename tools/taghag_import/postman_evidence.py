@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import re
 from dataclasses import dataclass, field
+from datetime import UTC, datetime
 from pathlib import Path
 
 MARKER = "[Tag Evidence JSON]"
@@ -64,14 +65,14 @@ def parse_tag_evidence(stdout: str) -> list[dict[str, object]]:
         except json.JSONDecodeError:
             brace_index = payload.find("{")
             if brace_index == -1:
+                evidences.append({"status": "malformed", "raw_line": line})
                 continue
             try:
                 obj = json.loads(payload[brace_index:])
             except json.JSONDecodeError:
+                evidences.append({"status": "malformed", "raw_line": line})
                 continue
-        if isinstance(obj, dict) and str(obj.get("schema", "")).startswith(
-            "tagslut.postman.tag_evidence"
-        ):
+        if isinstance(obj, dict):
             evidences.append(obj)
     return evidences
 
@@ -156,3 +157,69 @@ def resolve_tag_evidence(stdout: str) -> ResolvedTags | None:
     if not resolved.providers_matched or resolved.is_empty():
         return None
     return resolved
+
+
+def evidence_lookup_key(evidence: dict[str, object]) -> str:
+    for key in ("lookup_isrc", "query", "isrc", "lookup_key"):
+        value = str(evidence.get(key) or "").strip()
+        if value:
+            return value
+    return ""
+
+
+def evidence_confidence(evidence: dict[str, object]) -> float | None:
+    if evidence.get("confidence") is not None:
+        try:
+            return float(evidence["confidence"])  # type: ignore[arg-type]
+        except (TypeError, ValueError):
+            return None
+    best = None
+    for candidate in evidence.get("candidates", []) or []:
+        if not isinstance(candidate, dict):
+            continue
+        for field_candidate in candidate.get("field_candidates", []) or []:
+            if not isinstance(field_candidate, dict):
+                continue
+            try:
+                score = float(field_candidate.get("confidence"))
+            except (TypeError, ValueError):
+                continue
+            best = score if best is None else max(best, score)
+    return best
+
+
+def evidence_to_row(
+    evidence: dict[str, object],
+    *,
+    lookup_type: str = "isrc",
+    lookup_key: str | None = None,
+) -> dict[str, object]:
+    status = str(evidence.get("status") or "malformed")
+    candidates = evidence.get("candidates")
+    if not isinstance(candidates, list):
+        candidates = []
+
+    winning_fields: dict[str, object] = {}
+    for candidate in candidates:
+        if not isinstance(candidate, dict):
+            continue
+        for field_candidate in candidate.get("field_candidates", []) or []:
+            if not isinstance(field_candidate, dict):
+                continue
+            field_name = str(field_candidate.get("field_name") or "")
+            value = field_candidate.get("normalized_value")
+            if field_name and value is not None:
+                winning_fields[field_name] = value
+
+    return {
+        "provider": str(evidence.get("provider") or "unknown"),
+        "lookup_type": lookup_type,
+        "lookup_key": lookup_key if lookup_key is not None else evidence_lookup_key(evidence),
+        "provider_track_id": evidence.get("provider_track_id") or evidence.get("track_id") or evidence.get("id"),
+        "status": status,
+        "confidence": evidence_confidence(evidence),
+        "winning_fields_json": winning_fields,
+        "candidates_json": candidates,
+        "raw_marker_json": evidence,
+        "fetched_at": str(evidence.get("fetched_at") or datetime.now(UTC).isoformat()),
+    }

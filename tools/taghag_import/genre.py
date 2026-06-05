@@ -431,7 +431,7 @@ def classify_genre(raw_genre: str | None) -> dict[str, object]:
     normalizer = default_genre_normalizer()
     normalized_genre, normalized_style = normalizer.normalize_pair(raw_genre)
     return {
-        "normalized_genre": normalized_genre or (raw_genre.strip() if raw_genre else "Unknown"),
-        "genre_family": normalized_style,
+        "canonical_genre": normalized_genre,
+        "canonical_subgenre": normalized_style,
         "confidence": 1.0 if normalized_genre else (0.2 if raw_genre else 0.0),
     }

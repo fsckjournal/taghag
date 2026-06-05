@@ -16,13 +16,18 @@ class TaghagDbClient:
         payload: list[dict[str, object]],
         *,
         on_conflict: str | None = None,
-    ) -> None:
+        return_rows: bool = False,
+    ) -> list[dict[str, object]]:
+        if not payload:
+            return []
+
         query = ""
         if on_conflict:
             query = "?" + parse.urlencode({"on_conflict": on_conflict})
 
         url = f"{self._config.supabase_url}/rest/v1/{table}{query}"
         body = json.dumps(payload).encode("utf-8")
+        prefer_return = "representation" if return_rows else "minimal"
         req = request.Request(
             url,
             data=body,
@@ -31,7 +36,7 @@ class TaghagDbClient:
                 "Content-Type": "application/json",
                 "apikey": self._config.service_role_key,
                 "Authorization": f"Bearer {self._config.service_role_key}",
-                "Prefer": "resolution=merge-duplicates,return=minimal",
+                "Prefer": f"resolution=merge-duplicates,return={prefer_return}",
                 "Accept-Profile": self._config.schema,
                 "Content-Profile": self._config.schema,
             },
@@ -41,6 +46,15 @@ class TaghagDbClient:
             with request.urlopen(req) as response:
                 if response.status >= 300:
                     raise RuntimeError(f"upload failed with status {response.status}")
+                if not return_rows:
+                    return []
+                raw = response.read().decode("utf-8", errors="replace")
+                if not raw.strip():
+                    return []
+                payload_obj = json.loads(raw)
+                if isinstance(payload_obj, list):
+                    return [dict(item) for item in payload_obj if isinstance(item, dict)]
+                return []
         except error.HTTPError as exc:
             detail = exc.read().decode("utf-8", errors="replace")
             raise RuntimeError(f"upload failed: {exc.code} {detail}") from exc
@@ -48,7 +62,115 @@ class TaghagDbClient:
     def upsert_import_run(self, import_run: dict[str, object]) -> None:
         self._postgrest_request("import_run", [import_run], on_conflict="id")
 
-    def upsert_tracks(self, tracks: list[dict[str, object]]) -> None:
-        if not tracks:
-            return
-        self._postgrest_request("mp3_track", tracks, on_conflict="owner_user_id,library_fingerprint")
+    def upsert_mp3_files(self, files: list[dict[str, object]]) -> list[dict[str, object]]:
+        return self._postgrest_request(
+            "mp3_file",
+            files,
+            on_conflict="owner_user_id,file_key",
+            return_rows=True,
+        )
+
+    def insert_observations(self, observations: list[dict[str, object]]) -> None:
+        self._postgrest_request("mp3_observation", observations)
+
+    def upsert_dj_tags(self, tags: list[dict[str, object]]) -> None:
+        self._postgrest_request("dj_tag", tags, on_conflict="owner_user_id,mp3_file_id")
+
+    def insert_quality_checks(self, checks: list[dict[str, object]]) -> None:
+        self._postgrest_request("quality_check", checks)
+
+    def insert_tag_evidence(self, evidence_rows: list[dict[str, object]]) -> None:
+        self._postgrest_request("tag_evidence", evidence_rows)
+
+    def upload_receipt_events(self, records: list[dict[str, object]]) -> dict[str, int]:
+        if not self._config.owner_user_id:
+            raise RuntimeError("TAGHAG_OWNER_USER_ID is required")
+        owner_user_id = self._config.owner_user_id
+
+        import_run_rows: list[dict[str, object]] = []
+        mp3_file_rows: list[dict[str, object]] = []
+        observation_events: list[dict[str, object]] = []
+        dj_tag_events: list[dict[str, object]] = []
+        quality_events: list[dict[str, object]] = []
+        evidence_events: list[dict[str, object]] = []
+
+        for record in records:
+            event_type = record.get("event_type")
+            if event_type == "import_run_start":
+                row = dict(record["import_run"])  # type: ignore[index]
+                row["owner_user_id"] = owner_user_id
+                import_run_rows.append(row)
+            elif event_type == "mp3_observed":
+                file_row = dict(record["mp3_file"])  # type: ignore[index]
+                file_row["owner_user_id"] = owner_user_id
+                mp3_file_rows.append(file_row)
+                observation_events.append(record)
+                dj_tag_events.append(record)
+            elif event_type == "quality_check":
+                quality_events.append(record)
+            elif event_type == "tag_evidence":
+                evidence_events.append(record)
+
+        if not import_run_rows:
+            raise RuntimeError("receipt is missing import_run_start event")
+
+        self.upsert_import_run(import_run_rows[0])
+        returned_files = self.upsert_mp3_files(mp3_file_rows)
+        file_ids = {
+            str(row.get("file_key")): str(row.get("id"))
+            for row in returned_files
+            if row.get("file_key") and row.get("id")
+        }
+
+        observations: list[dict[str, object]] = []
+        dj_tags: list[dict[str, object]] = []
+        for record in observation_events:
+            file_key = str(dict(record["mp3_file"])["file_key"])  # type: ignore[index]
+            mp3_file_id = file_ids.get(file_key)
+            if not mp3_file_id:
+                continue
+            observation = dict(record["mp3_observation"])  # type: ignore[index]
+            observation["owner_user_id"] = owner_user_id
+            observation["mp3_file_id"] = mp3_file_id
+            observations.append(observation)
+
+            tag = dict(record["dj_tag"])  # type: ignore[index]
+            tag["owner_user_id"] = owner_user_id
+            tag["mp3_file_id"] = mp3_file_id
+            dj_tags.append(tag)
+
+        quality_checks: list[dict[str, object]] = []
+        for record in quality_events:
+            file_key = str(record.get("file_key") or "")
+            mp3_file_id = file_ids.get(file_key)
+            if not mp3_file_id:
+                continue
+            row = dict(record["quality_check"])  # type: ignore[index]
+            row["owner_user_id"] = owner_user_id
+            row["mp3_file_id"] = mp3_file_id
+            quality_checks.append(row)
+
+        evidence_rows: list[dict[str, object]] = []
+        for record in evidence_events:
+            file_key = str(record.get("file_key") or "")
+            mp3_file_id = file_ids.get(file_key)
+            if not mp3_file_id:
+                continue
+            row = dict(record["tag_evidence"])  # type: ignore[index]
+            row["owner_user_id"] = owner_user_id
+            row["mp3_file_id"] = mp3_file_id
+            evidence_rows.append(row)
+
+        self.insert_observations(observations)
+        self.upsert_dj_tags(dj_tags)
+        self.insert_quality_checks(quality_checks)
+        self.insert_tag_evidence(evidence_rows)
+
+        return {
+            "import_run": 1,
+            "mp3_file": len(mp3_file_rows),
+            "mp3_observation": len(observations),
+            "dj_tag": len(dj_tags),
+            "quality_check": len(quality_checks),
+            "tag_evidence": len(evidence_rows),
+        }

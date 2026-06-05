@@ -3,6 +3,12 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
+OUT_OF_SCOPE_AUDIO_EXTENSIONS = frozenset(
+    {".m4a", ".aac", ".flac", ".wav", ".aiff", ".aif", ".alac", ".ogg", ".opus", ".wma"}
+)
+JUNK_FILENAMES = frozenset({".DS_Store"})
+JUNK_DIRS = frozenset({"__MACOSX", ".Trashes", ".Spotlight-V100", ".fseventsd"})
+
 
 @dataclass(frozen=True)
 class DiscoveryRecord:
@@ -22,7 +28,11 @@ def discover_audio_files(root: str | Path) -> tuple[list[DiscoveryRecord], list[
     skipped: list[DiscoveryRecord] = []
 
     for path in sorted(root_path.rglob("*")):
+        if any(part in JUNK_DIRS for part in path.parts):
+            continue
         if not path.is_file():
+            continue
+        if path.name in JUNK_FILENAMES or path.name.startswith("._"):
             continue
 
         rel = str(path.relative_to(root_path))
@@ -39,14 +49,15 @@ def discover_audio_files(root: str | Path) -> tuple[list[DiscoveryRecord], list[
             )
             continue
 
-        skipped.append(
-            DiscoveryRecord(
-                path=str(path),
-                relative_path=rel,
-                extension=ext,
-                status="skipped",
-                reason="out_of_scope_non_mp3",
+        if ext in OUT_OF_SCOPE_AUDIO_EXTENSIONS:
+            skipped.append(
+                DiscoveryRecord(
+                    path=str(path),
+                    relative_path=rel,
+                    extension=ext,
+                    status="out_of_scope_audio",
+                    reason="out_of_scope_audio",
+                )
             )
-        )
 
     return found, skipped

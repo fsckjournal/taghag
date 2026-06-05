@@ -8,6 +8,6 @@
 - No file deletion or trashing.
 - No server-only key in frontend code.
 - SQL changes must be source-controlled migrations.
-- Active docs are `README.md`, `AGENT.md`, and `.github/prompts/README.md`.
+- Active docs are `README.md`, `AGENT.md`, `docs/TAGHAG_HANDOVER.md`, `docs/TAGHAG_MASTER_IMPLEMENTATION_PLAN.md`, and `.github/prompts/README.md`.
 - Reusable prompts belong in `.github/prompts/` and should use the `taghag-<order>-<scope>.prompt.md` naming template.
 - Commit intentionally staged changes and push.

@@ -36,6 +36,8 @@ Use these files as the active project docs for future agent sessions:
 
 - [README.md](/Users/g/Projects/taghag/README.md)
 - [AGENT.md](/Users/g/Projects/taghag/AGENT.md)
+- [docs/TAGHAG_HANDOVER.md](/Users/g/Projects/taghag/docs/TAGHAG_HANDOVER.md)
+- [docs/TAGHAG_MASTER_IMPLEMENTATION_PLAN.md](/Users/g/Projects/taghag/docs/TAGHAG_MASTER_IMPLEMENTATION_PLAN.md)
 - [.github/prompts/README.md](/Users/g/Projects/taghag/.github/prompts/README.md)
 
 ## Prompt library

@@ -30,6 +30,26 @@ The importer reads server-side upload credentials from environment variables onl
 
 All SQL changes belong in source-controlled migrations under [database/migrations](/Users/g/Projects/taghag/database/migrations).
 
+## Active docs
+
+Use these files as the active project docs for future agent sessions:
+
+- [README.md](/Users/g/Projects/taghag/README.md)
+- [AGENT.md](/Users/g/Projects/taghag/AGENT.md)
+- [.github/prompts/README.md](/Users/g/Projects/taghag/.github/prompts/README.md)
+
+## Prompt library
+
+Reusable project prompts live under [.github/prompts](/Users/g/Projects/taghag/.github/prompts).
+
+Prompt filename template:
+- `taghag-<order>-<scope>.prompt.md`
+
+Example names:
+- `taghag-00-master-implementation-plan.prompt.md`
+- `taghag-03-import-cli.prompt.md`
+- `taghag-09-verification-checklist.prompt.md`
+
 ## Initial developer setup
 
 1. Create a Python virtual environment for the importer and install [tools/pyproject.toml](/Users/g/Projects/taghag/tools/pyproject.toml).

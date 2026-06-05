@@ -1,0 +1,25 @@
+The work is done only when:
+
+- The migration applies with `supabase db reset`.
+- The public schema contains exactly the intended 9 app tables.
+- `mp3_file` is the primary asset table.
+- `mp3_track` does not exist.
+- RLS is enabled on every public app table.
+- No anon policies exist.
+- Explicit grants exist.
+- ISRC is not unique and is not identity.
+- No storage/upload path concepts exist.
+- Import CLI writes a local receipt before upload.
+- Same batch import is idempotent for `mp3_file`.
+- `mp3_observation` records each run.
+- Missing metadata creates quality issues instead of failed imports.
+- Postman evidence stores all statuses and never blocks import.
+- Raw evidence is preserved.
+- Web uses generated `Database` types.
+- Web uses publishable key only.
+- Clean-room audit passes.
+- Python tests pass.
+- Supabase reset passes.
+- Web typecheck/test passes if configured.
+- README and `AGENT.md` match the implemented commands.
+- Changes are committed and pushed.

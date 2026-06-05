@@ -108,7 +108,8 @@ Known existing work from previous agents:
 - Postman evidence parser should exist as
   `tools/taghag_import/postman_evidence.py`.
 - Tests should exist under `tools/tests/`.
-- A first migration may exist under `supabase/migrations/0001_initial_schema.sql`.
+- A first migration may exist under
+  `supabase/migrations/20260606000000_initial_mp3_metadata_schema.sql`.
 
 Known migration problem to watch for:
 

@@ -67,7 +67,7 @@ Priority order:
 ```bash
 git status --short
 pytest tools/tests -q
-sed -n '1,220p' supabase/migrations/0001_initial_schema.sql
+sed -n '1,220p' supabase/migrations/20260606000000_initial_mp3_metadata_schema.sql
 sed -n '1,220p' .github/prompts/taghag-01-repo-layout.prompt.md
 sed -n '1,260p' .github/prompts/taghag-02-first-migration.prompt.md
 ```

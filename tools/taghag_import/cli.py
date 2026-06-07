@@ -347,7 +347,20 @@ def build_parser() -> argparse.ArgumentParser:
     transcode.add_argument("--source", required=True, help="Source directory containing FLAC files")
     transcode.add_argument("--output", required=True, help="Destination root for mirrored MP3 files")
     transcode.add_argument("--dry-run", action="store_true", help="Print counts without writing files")
-    transcode.add_argument("--verbose", action="store_true", help="Print each transcode operation")
+    verbosity = transcode.add_mutually_exclusive_group()
+    verbosity.add_argument(
+        "--verbose",
+        dest="verbose",
+        action="store_true",
+        default=True,
+        help="Print each transcode or existing-file decision (default)",
+    )
+    verbosity.add_argument(
+        "--quiet",
+        dest="verbose",
+        action="store_false",
+        help="Print summary only",
+    )
     transcode.set_defaults(func=_transcode)
 
     return parser

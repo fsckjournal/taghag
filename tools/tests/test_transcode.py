@@ -49,6 +49,20 @@ def test_execute_transcode_plan_dry_run_writes_nothing(tmp_path: Path) -> None:
     assert not output.exists()
 
 
+def test_execute_transcode_plan_dry_run_prints_per_file_when_verbose(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    source = tmp_path / "source"
+    output = tmp_path / "output"
+    source.mkdir()
+    (source / "track.flac").write_bytes(b"flac")
+    plan = build_transcode_plan(source, output)
+
+    execute_transcode_plan(plan, dry_run=True, verbose=True)
+
+    assert "planned:" in capsys.readouterr().out
+
+
 def test_execute_transcode_plan_uses_metadata_only_ffmpeg_command(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

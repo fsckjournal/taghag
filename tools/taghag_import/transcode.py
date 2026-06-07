@@ -67,10 +67,16 @@ def execute_transcode_plan(
         "failed": 0,
     }
     if dry_run:
+        if verbose:
+            for job in jobs:
+                label = "existing" if job.status == "existing" else "planned"
+                print(f"{label}: {job.source} -> {job.destination}")
         return result
 
     for job in jobs:
         if job.status != "ready":
+            if verbose:
+                print(f"existing: {job.destination}")
             continue
         job.destination.parent.mkdir(parents=True, exist_ok=True)
         if verbose:

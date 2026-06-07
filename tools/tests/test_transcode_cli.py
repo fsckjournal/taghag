@@ -16,3 +16,19 @@ def test_transcode_command_dry_run_accepts_source_and_output(tmp_path: Path) -> 
 
     assert args.func(args) == 0
     assert not output.exists()
+
+
+def test_transcode_command_is_verbose_by_default() -> None:
+    args = cli.build_parser().parse_args(
+        ["transcode", "--source", "/tmp/source", "--output", "/tmp/output"]
+    )
+
+    assert args.verbose is True
+
+
+def test_transcode_command_accepts_quiet_mode() -> None:
+    args = cli.build_parser().parse_args(
+        ["transcode", "--source", "/tmp/source", "--output", "/tmp/output", "--quiet"]
+    )
+
+    assert args.verbose is False

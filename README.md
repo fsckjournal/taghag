@@ -131,7 +131,8 @@ taghag-import transcode \
 ```
 
 Remove `--dry-run` to transcode. This command does not read or write Tagslut,
-Supabase, or any other database.
+Supabase, or any other database. Per-file progress is printed by default; add
+`--quiet` for summary-only output.
 
 ## Verification
 

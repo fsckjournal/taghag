@@ -81,8 +81,10 @@ Within the input batch, select the lexicographically first path as the
 deterministic keeper. Other members are reported as blocked audio duplicates
 and are not transcoded.
 
-Before admission, compare each keeper fingerprint against fingerprints from
-MP3s already present beneath the configured Taghag output root. If the audio
+Before admission, compare each keeper fingerprint against the local source-PCM
+fingerprint index written beside previously admitted Taghag MP3s. A decoded
+lossy MP3 cannot reproduce the source PCM hash, so the index preserves the
+source fingerprint associated with each validated MP3 path. If the audio
 already exists there, block the new FLAC instead of creating another MP3.
 Compilation membership and release context do not override this rule. This
 comparison is local and does not require Supabase.

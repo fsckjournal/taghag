@@ -11,4 +11,6 @@ __all__ = [
     "receipt",
     "db_client",
     "transcode",
+    "flac",
+    "stage",
 ]

@@ -134,6 +134,23 @@ Remove `--dry-run` to transcode. This command does not read or write Tagslut,
 Supabase, or any other database. Per-file progress is printed by default; add
 `--quiet` for summary-only output.
 
+## End-to-end FLAC staging
+
+Use `stage` for the practical A-to-Z workflow:
+
+```bash
+cd tools
+taghag-import stage \
+  --source /Volumes/MUSIC/staging/StreamripDownloads-2/Qobuz \
+  --output /Volumes/MUSIC/taghag/qobuz-test
+```
+
+The command validates FLACs, hashes canonical decoded PCM, blocks duplicate
+audio even across compilations, transcodes admitted tracks, validates MP3s, and
+writes local reports and a metadata-only receipt. Source FLACs are never moved
+or deleted, and neither Tagslut nor Supabase is accessed. Add `--dry-run` to
+perform the full validation and dedupe plan without writing the output tree.
+
 ## Verification
 
 Run `supabase db reset` only when using the local Supabase CLI stack with Docker available. For a hosted dev project, verify by applying the source-controlled migrations to that project and running the validation SQL from the implementation plan against the hosted database.

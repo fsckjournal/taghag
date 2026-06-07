@@ -15,6 +15,7 @@ from .genre import classify_genre
 from .postman_evidence import evidence_lookup_key, evidence_to_row, parse_postman_evidence
 from .receipt import append_receipt, event, receipt_path_for_run, read_receipt, write_receipt
 from .tags import compute_file_identity, extract_mp3_tags
+from .stage import execute_stage, plan_stage
 from .transcode import build_transcode_plan, execute_transcode_plan
 
 
@@ -304,6 +305,30 @@ def _transcode(args: argparse.Namespace) -> int:
     return 1 if result["failed"] else 0
 
 
+def _stage(args: argparse.Namespace) -> int:
+    try:
+        plan = plan_stage(args.source, args.output)
+        result = execute_stage(plan, dry_run=args.dry_run, verbose=args.verbose)
+    except (OSError, RuntimeError, ValueError) as exc:
+        print(f"Stage failed: {exc}")
+        return 1
+    for label in (
+        "discovered",
+        "admitted",
+        "duplicates_blocked",
+        "invalid",
+        "planned",
+        "existing",
+        "transcoded",
+        "failed",
+    ):
+        print(f"{label.replace('_', ' ').title()}: {result[label]}")
+    print(f"Output: {Path(args.output).expanduser().resolve()}")
+    if args.dry_run:
+        print("Dry run: no output files were written.")
+    return 1 if result["invalid"] or result["failed"] else 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="taghag-import")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -362,6 +387,18 @@ def build_parser() -> argparse.ArgumentParser:
         help="Print summary only",
     )
     transcode.set_defaults(func=_transcode)
+
+    stage = subparsers.add_parser(
+        "stage",
+        help="Validate, deduplicate, transcode, and receipt local FLAC files without database access",
+    )
+    stage.add_argument("--source", required=True, help="FLAC file or directory")
+    stage.add_argument("--output", required=True, help="Taghag batch output root")
+    stage.add_argument("--dry-run", action="store_true", help="Plan without writing output files")
+    stage_verbosity = stage.add_mutually_exclusive_group()
+    stage_verbosity.add_argument("--verbose", dest="verbose", action="store_true", default=True)
+    stage_verbosity.add_argument("--quiet", dest="verbose", action="store_false")
+    stage.set_defaults(func=_stage)
 
     return parser
 

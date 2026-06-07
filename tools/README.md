@@ -25,3 +25,10 @@ taghag-import transcode \
 Remove `--dry-run` to write mirrored 320 kbps MP3 files. The command is
 filesystem-only and does not initialize a database client. It prints every
 transcode and existing-file skip by default; use `--quiet` for summary only.
+
+For validation, decoded-audio dedupe, transcode, MP3 verification, reports, and
+a receipt in one database-free operation:
+
+```bash
+taghag-import stage --source /path/to/flacs --output /path/to/taghag-batch
+```

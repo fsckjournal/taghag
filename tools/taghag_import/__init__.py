@@ -10,4 +10,5 @@ __all__ = [
     "postman_evidence",
     "receipt",
     "db_client",
+    "transcode",
 ]

@@ -114,6 +114,25 @@ row and upsert the five Magikbox attributes, genre candidates, model metadata,
 and source-artifact digest into `track_analysis`. Audio bytes, model inputs,
 and temporary analysis files are never included in database payloads.
 
+## Local FLAC-to-MP3 transcode
+
+Taghag includes a database-free transcode command. It recursively discovers
+FLAC files, mirrors their folder structure, copies source metadata through
+FFmpeg, and writes 320 kbps MP3 files. Existing non-empty MP3 files are skipped.
+
+Preview the Qobuz staging batch without writing anything:
+
+```bash
+cd tools
+taghag-import transcode \
+  --source /Volumes/MUSIC/staging/StreamripDownloads-2/Qobuz \
+  --output /Volumes/MUSIC/taghag/qobuz-test/mp3 \
+  --dry-run
+```
+
+Remove `--dry-run` to transcode. This command does not read or write Tagslut,
+Supabase, or any other database.
+
 ## Verification
 
 Run `supabase db reset` only when using the local Supabase CLI stack with Docker available. For a hosted dev project, verify by applying the source-controlled migrations to that project and running the validation SQL from the implementation plan against the hosted database.

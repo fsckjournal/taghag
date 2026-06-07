@@ -15,6 +15,7 @@ from .genre import classify_genre
 from .postman_evidence import evidence_lookup_key, evidence_to_row, parse_postman_evidence
 from .receipt import append_receipt, event, receipt_path_for_run, read_receipt, write_receipt
 from .tags import compute_file_identity, extract_mp3_tags
+from .transcode import build_transcode_plan, execute_transcode_plan
 
 
 MISSING_TAG_ISSUES = {
@@ -284,6 +285,25 @@ def _import_analysis(args: argparse.Namespace) -> int:
         return 1
 
 
+def _transcode(args: argparse.Namespace) -> int:
+    try:
+        plan = build_transcode_plan(args.source, args.output)
+        result = execute_transcode_plan(plan, dry_run=args.dry_run, verbose=args.verbose)
+    except (OSError, ValueError) as exc:
+        print(f"Transcode planning failed: {exc}")
+        return 1
+
+    print(f"FLACs discovered: {len(plan)}")
+    print(f"Planned:          {result['planned']}")
+    print(f"Existing:         {result['existing']}")
+    print(f"Transcoded:       {result['transcoded']}")
+    print(f"Failed:           {result['failed']}")
+    print(f"Output:           {Path(args.output).expanduser().resolve()}")
+    if args.dry_run:
+        print("Dry run: no directories or MP3 files were written.")
+    return 1 if result["failed"] else 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="taghag-import")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -319,6 +339,16 @@ def build_parser() -> argparse.ArgumentParser:
     import_analysis.add_argument("--dry-run", action="store_true", help="Write receipt only and skip upload")
     import_analysis.add_argument("--no-upload", action="store_true", help="Write receipt only and skip upload")
     import_analysis.set_defaults(func=_import_analysis)
+
+    transcode = subparsers.add_parser(
+        "transcode",
+        help="Transcode local FLAC files to mirrored 320 kbps MP3s without database access",
+    )
+    transcode.add_argument("--source", required=True, help="Source directory containing FLAC files")
+    transcode.add_argument("--output", required=True, help="Destination root for mirrored MP3 files")
+    transcode.add_argument("--dry-run", action="store_true", help="Print counts without writing files")
+    transcode.add_argument("--verbose", action="store_true", help="Print each transcode operation")
+    transcode.set_defaults(func=_transcode)
 
     return parser
 

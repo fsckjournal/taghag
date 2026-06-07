@@ -23,7 +23,7 @@ The output root contains:
   receipts/
     stage.jsonl
   reports/
-    exact_duplicates.csv
+    audio_duplicates.csv
     metadata_candidates.csv
     summary.json
 ```
@@ -39,7 +39,9 @@ and reporting without creating the output tree or transcoding audio.
 - No Supabase connection is made by `stage`.
 - Audio remains on local disks.
 - Dedupe is report-only at the source layer.
-- Exact duplicate losers are skipped during transcoding, but remain untouched.
+- Exact audio duplicates are blocked from admission and transcoding, but remain
+  untouched on disk.
+- Release, album, and compilation context never permits duplicate audio.
 - Metadata similarity never causes an automatic skip.
 
 ## Pipeline
@@ -66,11 +68,24 @@ valid files.
 
 ### 3. Fingerprint And Dedupe
 
-Compute a full SHA-256 file checksum for every valid FLAC.
+Compute both:
 
-Exact duplicate groups are files with the same SHA-256 checksum. Select the
-lexicographically first path as the deterministic keeper. Other members are
-reported as exact duplicates and skipped during transcoding.
+- A full SHA-256 file checksum for provenance and exact-file detection.
+- A SHA-256 digest of canonical decoded PCM samples that ignores container
+  metadata and embedded artwork.
+
+Files with the same decoded-audio fingerprint are audio duplicates even when
+their tags, artwork, release folder, or FLAC container bytes differ.
+
+Within the input batch, select the lexicographically first path as the
+deterministic keeper. Other members are reported as blocked audio duplicates
+and are not transcoded.
+
+Before admission, compare each keeper fingerprint against fingerprints from
+MP3s already present beneath the configured Taghag output root. If the audio
+already exists there, block the new FLAC instead of creating another MP3.
+Compilation membership and release context do not override this rule. This
+comparison is local and does not require Supabase.
 
 Also report, without automatically deduping:
 
@@ -78,7 +93,8 @@ Also report, without automatically deduping:
 - Repeated normalized artist/title pairs with different checksums.
 
 These are review candidates because releases, edits, masters, and mixes may
-legitimately share metadata.
+legitimately share metadata. They are not duplicates unless their decoded-audio
+fingerprints match.
 
 ### 4. Transcode
 
@@ -111,14 +127,16 @@ Failed outputs remain reported and are excluded from metadata receipt events.
 
 ### 6. Build Metadata Receipt
 
-For every successfully validated MP3, reuse Taghag's existing MP3 identity,
-ID3 extraction, genre normalization, observation, and quality-check logic.
+For every successfully validated and admitted MP3, reuse Taghag's existing MP3
+identity, ID3 extraction, genre normalization, observation, and quality-check
+logic. Persist its decoded-audio fingerprint in the metadata receipt so later
+stage runs can block duplicate audio.
 
 The stage receipt contains:
 
 - Stage start and tool versions.
 - FLAC discovery and validation records.
-- Exact duplicate decisions.
+- Audio-duplicate block decisions, including the keeper or existing Taghag MP3.
 - Metadata-only duplicate candidates.
 - Transcode result per keeper.
 - MP3 metadata and quality events.
@@ -128,8 +146,10 @@ The receipt must not contain credentials or audio data.
 
 ## Exit Behavior
 
-Return success when all eligible keeper FLACs are either successfully
-transcoded or already have valid destination MP3s.
+Return success when every non-duplicate eligible FLAC is either successfully
+transcoded or already has its valid destination MP3. Blocked audio duplicates
+are an expected result and are counted separately, not treated as processing
+failures.
 
 Return failure when:
 
@@ -145,7 +165,7 @@ Reports and receipts should still be written for partial failures unless
 Verbose output is the default. Print one decision for every discovered FLAC:
 
 - `invalid`
-- `exact-duplicate`
+- `audio-duplicate-blocked`
 - `metadata-candidate`
 - `existing`
 - `transcode`
@@ -161,11 +181,14 @@ Tests must cover:
 - Single-file and directory discovery.
 - Ignored non-FLAC and junk files.
 - FLAC validation success and failure.
-- Exact SHA-256 duplicate keeper selection.
+- Exact-file duplicate keeper selection.
+- Decoded-audio duplicates with different tags or artwork are blocked.
+- Compilation folders do not permit duplicate audio.
+- Audio already present in the Taghag MP3 corpus is blocked.
 - Same ISRC with different checksums remains a review candidate.
 - Same artist/title with different checksums remains a review candidate.
 - Dry run creates no output directories.
-- Exact duplicate loser remains on disk and is not transcoded.
+- Blocked duplicate remains on disk and is not transcoded.
 - Mirrored 320 kbps transcode command.
 - Existing MP3 resume behavior.
 - Failed partial MP3 cleanup.
@@ -178,5 +201,5 @@ Tests must cover:
 - Running Essentia models inside `stage`.
 - Uploading receipts or analysis to Supabase.
 - Moving duplicate files to Trash or quarantine.
-- Acoustic fingerprint dedupe.
+- Fuzzy perceptual matching of materially different masters or edits.
 - Automatically collapsing ISRC or artist/title candidates.

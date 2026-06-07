@@ -7,6 +7,7 @@ from typing import Any
 import uuid
 
 from .audio_probe import probe_mp3
+from .analysis_import import build_analysis_import_records
 from .config import read_database_config
 from .db_client import TaghagDbClient
 from .discover import discover_audio_files
@@ -261,6 +262,28 @@ def _load(args: argparse.Namespace) -> int:
     return 0
 
 
+def _import_analysis(args: argparse.Namespace) -> int:
+    records = build_analysis_import_records(args.input)
+    run_id = str(records[0]["run_id"])
+    receipt_path = receipt_path_for_run(args.receipt_dir, run_id)
+    write_receipt(receipt_path, records)
+
+    if args.no_upload or args.dry_run:
+        print(f"Wrote receipt to {receipt_path}")
+        return 0
+
+    try:
+        client = TaghagDbClient(read_database_config())
+        result = client.upload_analysis_events(records)
+        append_receipt(receipt_path, [event("upload_result", run_id=run_id, status="uploaded", result=result)])
+        print(f"Uploaded analysis import {run_id}; receipt: {receipt_path}")
+        return 0
+    except Exception as exc:
+        append_receipt(receipt_path, [event("upload_result", run_id=run_id, status="failed", error=str(exc))])
+        print(f"Upload failed after receipt was written: {exc}")
+        return 1
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="taghag-import")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -289,6 +312,13 @@ def build_parser() -> argparse.ArgumentParser:
     load = subparsers.add_parser("load", help="Compatibility wrapper: upload a JSONL receipt")
     load.add_argument("--receipt", required=True, help="Path to a JSONL receipt file")
     load.set_defaults(func=_load)
+
+    import_analysis = subparsers.add_parser("import-analysis", help="Import local Essentia metadata sidecar")
+    import_analysis.add_argument("--input", required=True, help="Path to essentia-lexicon-sidecar/2 JSON")
+    import_analysis.add_argument("--receipt-dir", default="artifacts/analysis_imports", help="Receipt root directory")
+    import_analysis.add_argument("--dry-run", action="store_true", help="Write receipt only and skip upload")
+    import_analysis.add_argument("--no-upload", action="store_true", help="Write receipt only and skip upload")
+    import_analysis.set_defaults(func=_import_analysis)
 
     return parser
 

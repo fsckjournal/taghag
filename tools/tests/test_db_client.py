@@ -80,3 +80,49 @@ def test_upload_receipt_events_uses_canonical_tables(monkeypatch) -> None:
     assert any("return=representation" in call[2] for call in calls)
     assert result["mp3_observation"] == 1
 
+
+def test_upload_analysis_events_resolves_file_key_and_upserts_metadata(monkeypatch) -> None:
+    calls: list[tuple[str, str, object]] = []
+
+    def fake_urlopen(req):
+        method = req.get_method()
+        payload = json.loads(req.data.decode("utf-8")) if req.data else None
+        calls.append((method, req.full_url, payload))
+        if method == "GET":
+            return FakeResponse([{"id": "file-id", "file_key": "sha256:abc"}])
+        return FakeResponse([])
+
+    monkeypatch.setattr("taghag_import.db_client.request.urlopen", fake_urlopen)
+    client = TaghagDbClient(
+        DatabaseConfig(
+            supabase_url="https://example.supabase.co",
+            service_role_key="service-key",
+            owner_user_id="00000000-0000-0000-0000-000000000001",
+        )
+    )
+
+    result = client.upload_analysis_events(
+        [
+            {
+                "event_type": "track_analysis",
+                "file_key": "sha256:abc",
+                "track_analysis": {
+                    "schema_name": "essentia-lexicon-sidecar/2",
+                    "source_artifact_sha256": "digest",
+                    "happy": 0.4,
+                    "aggressive": 0.2,
+                    "relaxed": 0.3,
+                    "party": 0.9,
+                    "danceability": 0.95,
+                    "genres_json": [],
+                    "models_json": {},
+                },
+            }
+        ]
+    )
+
+    assert any(method == "GET" and "/mp3_file?" in url for method, url, _ in calls)
+    analysis_payload = next(payload for method, url, payload in calls if "/track_analysis" in url)
+    assert analysis_payload[0]["mp3_file_id"] == "file-id"
+    assert analysis_payload[0]["owner_user_id"] == "00000000-0000-0000-0000-000000000001"
+    assert result == {"track_analysis": 1, "unmatched": 0}

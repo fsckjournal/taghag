@@ -58,3 +58,18 @@ def test_migration_adds_updated_at_trigger_for_every_app_table() -> None:
     missing = [table for table in APP_TABLES if not has_updated_at_trigger(sql, table)]
 
     assert missing == []
+
+
+def test_magikbox_migration_creates_secured_track_analysis_table() -> None:
+    migration = next(migration_path().parent.glob("*_add_magikbox_track_analysis.sql"))
+    sql = migration.read_text(encoding="utf-8").lower()
+
+    assert "create table public.track_analysis" in sql
+    assert "foreign key (mp3_file_id, owner_user_id)" in sql
+    assert "enable row level security" in sql
+    assert "to authenticated" in sql
+    assert "to service_role" in sql
+    assert "to anon" not in sql
+    assert "audio_data" not in sql
+    for attribute in ("happy", "aggressive", "relaxed", "party", "danceability"):
+        assert attribute in sql

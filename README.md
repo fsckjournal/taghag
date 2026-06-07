@@ -90,6 +90,30 @@ Upload uses the server-side Taghag env vars from [.env.example](/Users/g/Project
 taghag-import import-batch --root /path/to/mp3-library --run-name first-import
 ```
 
+## Essentia metadata import
+
+Taghag accepts `essentia-lexicon-sidecar/2` analysis artifacts and uploads only
+metadata. MP3 audio remains on local disks.
+
+Each track should include its Taghag `file_key`. For migration artifacts that
+predate Taghag, the importer can calculate the key when the referenced local
+MP3 path still exists.
+
+Write and inspect a receipt without contacting Supabase:
+
+```bash
+cd tools
+taghag-import import-analysis \
+  --input /path/to/sidecar.json \
+  --receipt-dir ../artifacts/analysis_imports \
+  --no-upload
+```
+
+Remove `--no-upload` to resolve each `file_key` against an existing `mp3_file`
+row and upsert the five Magikbox attributes, genre candidates, model metadata,
+and source-artifact digest into `track_analysis`. Audio bytes, model inputs,
+and temporary analysis files are never included in database payloads.
+
 ## Verification
 
 Run `supabase db reset` only when using the local Supabase CLI stack with Docker available. For a hosted dev project, verify by applying the source-controlled migrations to that project and running the validation SQL from the implementation plan against the hosted database.

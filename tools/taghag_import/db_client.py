@@ -59,6 +59,28 @@ class TaghagDbClient:
             detail = exc.read().decode("utf-8", errors="replace")
             raise RuntimeError(f"upload failed: {exc.code} {detail}") from exc
 
+    def _get_postgrest_rows(self, table: str, query: dict[str, str]) -> list[dict[str, object]]:
+        url = f"{self._config.supabase_url}/rest/v1/{table}?" + parse.urlencode(query)
+        req = request.Request(
+            url,
+            method="GET",
+            headers={
+                "apikey": self._config.service_role_key,
+                "Authorization": f"Bearer {self._config.service_role_key}",
+                "Accept-Profile": self._config.schema,
+            },
+        )
+        try:
+            with request.urlopen(req) as response:
+                raw = response.read().decode("utf-8", errors="replace")
+                payload_obj = json.loads(raw) if raw.strip() else []
+                if isinstance(payload_obj, list):
+                    return [dict(item) for item in payload_obj if isinstance(item, dict)]
+                return []
+        except error.HTTPError as exc:
+            detail = exc.read().decode("utf-8", errors="replace")
+            raise RuntimeError(f"lookup failed: {exc.code} {detail}") from exc
+
     def upsert_import_run(self, import_run: dict[str, object]) -> None:
         self._postgrest_request("import_run", [import_run], on_conflict="id")
 
@@ -81,6 +103,59 @@ class TaghagDbClient:
 
     def insert_tag_evidence(self, evidence_rows: list[dict[str, object]]) -> None:
         self._postgrest_request("tag_evidence", evidence_rows)
+
+    def upsert_track_analysis(self, analysis_rows: list[dict[str, object]]) -> None:
+        self._postgrest_request(
+            "track_analysis",
+            analysis_rows,
+            on_conflict="owner_user_id,mp3_file_id,schema_name,source_artifact_sha256",
+        )
+
+    def _mp3_file_ids_for_file_keys(self, file_keys: set[str]) -> dict[str, str]:
+        if not file_keys:
+            return {}
+        rows: list[dict[str, object]] = []
+        sorted_keys = sorted(file_keys)
+        for offset in range(0, len(sorted_keys), 50):
+            quoted = ",".join(f'"{key}"' for key in sorted_keys[offset : offset + 50])
+            rows.extend(
+                self._get_postgrest_rows(
+                    "mp3_file",
+                    {
+                        "select": "id,file_key",
+                        "owner_user_id": f"eq.{self._config.owner_user_id}",
+                        "file_key": f"in.({quoted})",
+                    },
+                )
+            )
+        return {
+            str(row.get("file_key")): str(row.get("id"))
+            for row in rows
+            if row.get("file_key") and row.get("id")
+        }
+
+    def upload_analysis_events(self, records: list[dict[str, object]]) -> dict[str, int]:
+        if not self._config.owner_user_id:
+            raise RuntimeError("TAGHAG_OWNER_USER_ID is required")
+        owner_user_id = self._config.owner_user_id
+        analysis_events = [record for record in records if record.get("event_type") == "track_analysis"]
+        file_ids = self._mp3_file_ids_for_file_keys({str(record.get("file_key")) for record in analysis_events})
+
+        analysis_rows: list[dict[str, object]] = []
+        unmatched = 0
+        for record in analysis_events:
+            file_key = str(record.get("file_key") or "")
+            mp3_file_id = file_ids.get(file_key)
+            if not mp3_file_id:
+                unmatched += 1
+                continue
+            row = dict(record["track_analysis"])  # type: ignore[index]
+            row["owner_user_id"] = owner_user_id
+            row["mp3_file_id"] = mp3_file_id
+            analysis_rows.append(row)
+
+        self.upsert_track_analysis(analysis_rows)
+        return {"track_analysis": len(analysis_rows), "unmatched": unmatched}
 
     def upload_receipt_events(self, records: list[dict[str, object]]) -> dict[str, int]:
         if not self._config.owner_user_id:

@@ -651,11 +651,20 @@ For user-editable metadata/organization tables, create write policies:
 
 ## 9. Phase 3: Schema Verification
 
-Run:
+Taghag remains Supabase-backed metadata software. Do not replace this path with
+SQLite unless a future task explicitly asks for that change.
+
+For the local Supabase CLI stack, Docker is expected. Run:
 
 ```bash
 supabase db reset
 ```
+
+If avoiding Docker for early development, use a free hosted Supabase dev
+project instead. Apply the files in `supabase/migrations/` to that hosted
+project, then run the validation SQL below against the hosted database.
+Hosted Supabase is not assumed to be paid; Taghag stores metadata only, so the
+free tier should be enough initially.
 
 If Supabase CLI is unavailable:
 
@@ -1158,7 +1167,8 @@ Python tests:
 
 Supabase tests:
 
-- `supabase db reset` applies migrations.
+- `supabase db reset` applies migrations when using the local CLI stack with Docker.
+- Hosted dev verification applies `supabase/migrations/` to a free Supabase project when avoiding Docker.
 - Unauthenticated access is denied.
 - Authenticated access follows owner policies.
 - Service role can upsert import tables.
@@ -1330,7 +1340,7 @@ The project is ready for the next implementation milestone only when:
 
 - The schema matches the 9-table MP3-only model.
 - The migration can be read without tagslut context.
-- `supabase db reset` applies cleanly.
+- Local verification with `supabase db reset` applies cleanly, or hosted dev verification applies the same migrations to a free Supabase project when avoiding Docker.
 - RLS and grants are verified.
 - The importer can produce local receipts.
 - Database upload is idempotent for `mp3_file`.

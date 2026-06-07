@@ -131,16 +131,18 @@ Hard requirements:
 - No policies to `anon`.
 - Authenticated policies use `(select auth.uid())`.
 
-- [ ] **Step 3: Validate migration locally**
+- [ ] **Step 3: Validate migration**
 
-Run:
+For the local Supabase CLI stack, Docker is expected. Run:
 
 ```bash
 cd /Users/g/Projects/taghag
 supabase db reset
 ```
 
-Then run the verification SQL from `.github/prompts/taghag-02-first-migration.prompt.md` to confirm table names, RLS, policies, and grants.
+To avoid Docker during early development, use a free hosted Supabase dev project instead and apply the files in `supabase/migrations/` there. Hosted Supabase is not assumed to be paid; Taghag is metadata-only, so the free tier should be enough initially.
+
+Then run the verification SQL from `.github/prompts/taghag-02-first-migration.prompt.md` against the local or hosted database to confirm table names, RLS, policies, and grants.
 
 Run grep checks:
 
@@ -648,7 +650,7 @@ cd web && npm run build
 Expected:
 - Clean-room audit passes.
 - Python tests pass.
-- Supabase reset applies the canonical migration.
+- Supabase reset applies the canonical migration when using local CLI with Docker, or the same migration applies to a free hosted Supabase dev project when avoiding Docker.
 - Web build passes.
 
 - [ ] **Step 2: Run final grep checks**
@@ -689,7 +691,7 @@ Expected: no uncommitted files remain and `main` is pushed.
 
 ## Acceptance Criteria
 
-- `supabase db reset` applies cleanly.
+- Local verification with `supabase db reset` applies cleanly, or hosted dev verification applies the same migrations to a free Supabase project when avoiding Docker.
 - Public app schema contains exactly the 9 canonical tables.
 - `mp3_file` exists and `mp3_track` does not.
 - RLS is enabled on every public app table.

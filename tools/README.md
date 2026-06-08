@@ -36,3 +36,25 @@ taghag-import stage --source /path/to/flacs --output /path/to/taghag-batch
 The discovery layer also recognizes `.m3u` playlist files alongside MP3s and
 out-of-scope audio, so they are tracked explicitly instead of being silently
 ignored.
+
+## Stage an explicit FLAC manifest
+
+Use a JSONL manifest to stage selected FLACs from multiple source folders in
+one decoded-audio dedupe cohort:
+
+```bash
+taghag-import stage \
+  --manifest /path/to/selected-flacs.jsonl \
+  --output /Volumes/LOSSY/taghag/selected-batch \
+  --dry-run
+```
+
+Each non-blank line contains an existing absolute FLAC source and its safe
+relative destination path:
+
+```json
+{"source":"/absolute/path/track.flac","relative_path":"release/track.flac"}
+```
+
+The source FLACs remain read-only. Remove `--dry-run` only after every manifest
+entry validates and destination paths are unique.

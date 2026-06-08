@@ -16,6 +16,12 @@ from .transcode import TranscodeJob, execute_transcode_plan
 
 
 @dataclass(frozen=True)
+class StageSource:
+    source: Path
+    relative_path: str
+
+
+@dataclass(frozen=True)
 class StageItem:
     source: Path
     relative_path: str
@@ -58,16 +64,78 @@ def _existing_pcm_index(output_root: Path) -> dict[str, Path]:
     return index
 
 
-def plan_stage(source: str | Path, output: str | Path) -> StagePlan:
-    source_root = Path(source).expanduser().resolve()
-    output_root = Path(output).expanduser().resolve()
-    flacs = discover_flacs(source_root)
+def load_stage_manifest(path: str | Path) -> list[StageSource]:
+    manifest_path = Path(path).expanduser().resolve()
+    sources: list[StageSource] = []
+    seen_sources: set[Path] = set()
+    seen_relative_paths: set[str] = set()
+
+    for line_number, line in enumerate(
+        manifest_path.read_text(encoding="utf-8").splitlines(),
+        start=1,
+    ):
+        if not line.strip():
+            continue
+        try:
+            payload = json.loads(line)
+        except json.JSONDecodeError as exc:
+            raise ValueError(f"manifest line {line_number} is not valid JSON") from exc
+        if not isinstance(payload, dict):
+            raise ValueError(f"manifest line {line_number} must be a JSON object")
+
+        source_value = payload.get("source")
+        relative_value = payload.get("relative_path")
+        if not isinstance(source_value, str) or not source_value.strip():
+            raise ValueError(f"manifest line {line_number} source must be a non-empty string")
+        if not isinstance(relative_value, str) or not relative_value.strip():
+            raise ValueError(
+                f"manifest line {line_number} relative_path must be a non-empty string"
+            )
+
+        unexpanded_source = Path(source_value).expanduser()
+        if not unexpanded_source.is_absolute():
+            raise ValueError(f"manifest line {line_number} source must be absolute")
+        source = unexpanded_source.resolve()
+        if not source.is_file():
+            raise ValueError(f"manifest line {line_number} source does not exist: {source}")
+        if source.suffix.casefold() != ".flac":
+            raise ValueError(f"manifest line {line_number} source must be a FLAC file")
+
+        relative_path = Path(relative_value)
+        if relative_path.is_absolute():
+            raise ValueError(f"manifest line {line_number} relative_path must be relative")
+        if ".." in relative_path.parts:
+            raise ValueError(f"manifest line {line_number} relative_path contains traversal")
+        if relative_path.suffix.casefold() != ".flac":
+            raise ValueError(f"manifest line {line_number} relative_path must end in .flac")
+        normalized_relative_path = relative_path.as_posix()
+
+        if source in seen_sources:
+            raise ValueError(f"manifest line {line_number} has duplicate source: {source}")
+        if normalized_relative_path in seen_relative_paths:
+            raise ValueError(
+                f"manifest line {line_number} has duplicate relative_path: "
+                f"{normalized_relative_path}"
+            )
+        seen_sources.add(source)
+        seen_relative_paths.add(normalized_relative_path)
+        sources.append(StageSource(source=source, relative_path=normalized_relative_path))
+
+    return sorted(sources, key=lambda item: str(item.source))
+
+
+def _plan_stage_sources(
+    source_root: Path,
+    output_root: Path,
+    sources: list[StageSource],
+) -> StagePlan:
     existing_pcm = _existing_pcm_index(output_root)
     keepers: dict[str, Path] = dict(existing_pcm)
     items: list[StageItem] = []
 
-    for path in flacs:
-        rel = _relative(path, source_root)
+    for stage_source in sources:
+        path = stage_source.source
+        rel = Path(stage_source.relative_path)
         destination = (output_root / "mp3" / rel).with_suffix(".mp3")
         probe = probe_flac(path)
         tags = extract_flac_tags(path)
@@ -102,6 +170,22 @@ def plan_stage(source: str | Path, output: str | Path) -> StagePlan:
                 for item in group:
                     candidates.append({"type": field, "key": key, "path": str(item.source)})
     return StagePlan(source_root, output_root, items, candidates)
+
+
+def plan_stage(source: str | Path, output: str | Path) -> StagePlan:
+    source_root = Path(source).expanduser().resolve()
+    output_root = Path(output).expanduser().resolve()
+    sources = [
+        StageSource(source=path, relative_path=str(_relative(path, source_root)))
+        for path in discover_flacs(source_root)
+    ]
+    return _plan_stage_sources(source_root, output_root, sources)
+
+
+def plan_stage_manifest(manifest: str | Path, output: str | Path) -> StagePlan:
+    manifest_path = Path(manifest).expanduser().resolve()
+    output_root = Path(output).expanduser().resolve()
+    return _plan_stage_sources(manifest_path, output_root, load_stage_manifest(manifest_path))
 
 
 def execute_stage(plan: StagePlan, *, dry_run: bool = False, verbose: bool = True) -> dict[str, int]:

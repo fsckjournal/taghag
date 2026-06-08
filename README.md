@@ -151,6 +151,27 @@ writes local reports and a metadata-only receipt. Source FLACs are never moved
 or deleted, and neither Tagslut nor Supabase is accessed. Add `--dry-run` to
 perform the full validation and dedupe plan without writing the output tree.
 
+For an explicit allowlist spanning multiple source folders, provide a JSONL
+manifest instead of `--source`:
+
+```bash
+cd tools
+taghag-import stage \
+  --manifest /path/to/selected-flacs.jsonl \
+  --output /Volumes/LOSSY/taghag/selected-batch \
+  --dry-run
+```
+
+Each non-blank line must contain an existing absolute FLAC `source` and a safe
+relative FLAC `relative_path`:
+
+```json
+{"source":"/absolute/path/track.flac","relative_path":"release/track.flac"}
+```
+
+One manifest is planned as one decoded-audio dedupe cohort. Source files remain
+read-only.
+
 ## Verification
 
 Run `supabase db reset` only when using the local Supabase CLI stack with Docker available. For a hosted dev project, verify by applying the source-controlled migrations to that project and running the validation SQL from the implementation plan against the hosted database.

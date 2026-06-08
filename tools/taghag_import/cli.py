@@ -16,7 +16,7 @@ from .genre import classify_genre
 from .postman_evidence import evidence_lookup_key, evidence_to_row, parse_postman_evidence
 from .receipt import append_receipt, event, receipt_path_for_run, read_receipt, write_receipt
 from .tags import compute_file_identity, extract_mp3_tags
-from .stage import execute_stage, plan_stage
+from .stage import execute_stage, plan_stage, plan_stage_manifest
 from .transcode import build_transcode_plan, execute_transcode_plan
 
 
@@ -314,7 +314,10 @@ def _transcode(args: argparse.Namespace) -> int:
 
 def _stage(args: argparse.Namespace) -> int:
     try:
-        plan = plan_stage(args.source, args.output)
+        if args.manifest:
+            plan = plan_stage_manifest(args.manifest, args.output)
+        else:
+            plan = plan_stage(args.source, args.output)
         result = execute_stage(plan, dry_run=args.dry_run, verbose=args.verbose)
     except (OSError, RuntimeError, ValueError) as exc:
         print(f"Stage failed: {exc}")
@@ -403,7 +406,9 @@ def build_parser() -> argparse.ArgumentParser:
         "stage",
         help="Validate, deduplicate, transcode, and receipt local FLAC files without database access",
     )
-    stage.add_argument("--source", required=True, help="FLAC file or directory")
+    stage_input = stage.add_mutually_exclusive_group(required=True)
+    stage_input.add_argument("--source", help="FLAC file or directory")
+    stage_input.add_argument("--manifest", help="JSONL allowlist of absolute FLAC source paths")
     stage.add_argument(
         "--output",
         default=_default_mp3_output_root(),

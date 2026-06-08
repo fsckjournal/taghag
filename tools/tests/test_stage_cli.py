@@ -9,7 +9,6 @@ def test_stage_cli_dry_run_uses_no_database(tmp_path: Path, monkeypatch) -> None
     source = tmp_path / "source"
     source.mkdir()
     (source / "track.flac").write_bytes(b"flac")
-    output = tmp_path / "output"
     monkeypatch.setattr(
         cli,
         "plan_stage",
@@ -29,9 +28,17 @@ def test_stage_cli_dry_run_uses_no_database(tmp_path: Path, monkeypatch) -> None
             "failed": 0,
         },
     )
-    args = cli.build_parser().parse_args(
-        ["stage", "--source", str(source), "--output", str(output), "--dry-run"]
-    )
+    args = cli.build_parser().parse_args(["stage", "--source", str(source), "--dry-run"])
 
     assert args.func(args) == 0
     assert args.verbose is True
+
+
+def test_stage_cli_uses_env_default_output(tmp_path: Path, monkeypatch) -> None:
+    source = tmp_path / "source"
+    source.mkdir()
+    monkeypatch.setenv("TAGHAG_MP3_OUTPUT_ROOT", "/Volumes/LOSSY/taghag")
+
+    args = cli.build_parser().parse_args(["stage", "--source", str(source), "--dry-run"])
+
+    assert args.output == "/Volumes/LOSSY/taghag"

@@ -32,3 +32,13 @@ def test_transcode_command_accepts_quiet_mode() -> None:
     )
 
     assert args.verbose is False
+
+
+def test_transcode_command_uses_env_default_output(tmp_path: Path, monkeypatch) -> None:
+    source = tmp_path / "source"
+    source.mkdir()
+    monkeypatch.setenv("TAGHAG_MP3_OUTPUT_ROOT", "/Volumes/LOSSY/taghag")
+
+    args = cli.build_parser().parse_args(["transcode", "--source", str(source), "--dry-run"])
+
+    assert args.output == "/Volumes/LOSSY/taghag"

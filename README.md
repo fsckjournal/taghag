@@ -126,11 +126,12 @@ Preview the Qobuz staging batch without writing anything:
 cd tools
 taghag-import transcode \
   --source /Volumes/MUSIC/staging/StreamripDownloads-2/Qobuz \
-  --output /Volumes/MUSIC/taghag/qobuz-test/mp3 \
   --dry-run
 ```
 
-Remove `--dry-run` to transcode. This command does not read or write Tagslut,
+Set `TAGHAG_MP3_OUTPUT_ROOT=/Volumes/LOSSY/taghag` in your local `.env` to
+make that the default output root for both `transcode` and `stage`. Remove
+`--dry-run` to transcode. This command does not read or write Tagslut,
 Supabase, or any other database. Per-file progress is printed by default; add
 `--quiet` for summary-only output.
 
@@ -142,7 +143,6 @@ Use `stage` for the practical A-to-Z workflow:
 cd tools
 taghag-import stage \
   --source /Volumes/MUSIC/staging/StreamripDownloads-2/Qobuz \
-  --output /Volumes/MUSIC/taghag/qobuz-test
 ```
 
 The command validates FLACs, hashes canonical decoded PCM, blocks duplicate

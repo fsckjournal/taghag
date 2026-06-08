@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 from datetime import UTC, datetime
+import os
 from pathlib import Path
 from typing import Any
 import uuid
@@ -27,6 +28,12 @@ MISSING_TAG_ISSUES = {
     "label": "missing_label",
     "isrc": "missing_isrc",
 }
+
+DEFAULT_MP3_OUTPUT_ROOT = "/Volumes/LOSSY/taghag"
+
+
+def _default_mp3_output_root() -> str:
+    return os.environ.get("TAGHAG_MP3_OUTPUT_ROOT") or DEFAULT_MP3_OUTPUT_ROOT
 
 
 def _now() -> str:
@@ -370,7 +377,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="Transcode local FLAC files to mirrored 320 kbps MP3s without database access",
     )
     transcode.add_argument("--source", required=True, help="Source directory containing FLAC files")
-    transcode.add_argument("--output", required=True, help="Destination root for mirrored MP3 files")
+    transcode.add_argument(
+        "--output",
+        default=_default_mp3_output_root(),
+        help=f"Destination root for mirrored MP3 files (default: {_default_mp3_output_root()})",
+    )
     transcode.add_argument("--dry-run", action="store_true", help="Print counts without writing files")
     verbosity = transcode.add_mutually_exclusive_group()
     verbosity.add_argument(
@@ -393,7 +404,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="Validate, deduplicate, transcode, and receipt local FLAC files without database access",
     )
     stage.add_argument("--source", required=True, help="FLAC file or directory")
-    stage.add_argument("--output", required=True, help="Taghag batch output root")
+    stage.add_argument(
+        "--output",
+        default=_default_mp3_output_root(),
+        help=f"Taghag batch output root (default: {_default_mp3_output_root()})",
+    )
     stage.add_argument("--dry-run", action="store_true", help="Plan without writing output files")
     stage_verbosity = stage.add_mutually_exclusive_group()
     stage_verbosity.add_argument("--verbose", dest="verbose", action="store_true", default=True)

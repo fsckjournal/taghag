@@ -36,6 +36,53 @@ Completed work aligns partially with prompts `01`, `03`, `04`, `06`, and `07`, b
   Run `pytest tools/tests -q` from the repository root.
 - Contributor guidance now exists in `AGENTS.md`.
 
+## Recent MP3 Tools Export
+
+On 2026-06-08, commit `6565e2c` added the MP3 tool export requested for
+Taghag. The work intentionally reuses and extends the existing `tags.py`,
+`audio_probe.py`, `postman_evidence.py`, and `discover.py` modules instead of
+adding an overlapping tag module.
+
+New focused modules:
+
+- `tools/taghag_import/mp3_audit.py`
+- `tools/taghag_import/provider_runner.py`
+
+New CLI commands:
+
+- `taghag-import audit-mp3`
+- `taghag-import dump-tags`
+- `taghag-import write-tags`
+- `taghag-import provider-evidence`
+
+Important behavior contracts:
+
+- `write-tags` is dry-run by default. It writes only with `--execute`.
+- Selective writes preserve unknown ID3 frames and existing comments.
+- Taghag does not write receipts, debug data, or provider notes into MP3
+  comments.
+- `provider-evidence` requires an explicit compatible Postman collection and
+  environment, or `TAGHAG_POSTMAN_COLLECTION` and
+  `TAGHAG_POSTMAN_ENVIRONMENT`.
+- Provider logs remain compatible with `import-batch --postman-evidence`.
+- For long provider batches, use `--prepare-only` to verify commands and let
+  the operator run the batch directly rather than keeping an agent session
+  polling a network-bound process.
+- The FLAC `transcode` and `stage` documentation is still intentional:
+  those commands are database-free preprocessing workflows that produce MP3s.
+  They are not database intake for FLAC files.
+
+Verification run after the implementation commit and push:
+
+```bash
+pytest tools/tests -q
+python tools/audit_cleanroom.py
+```
+
+The last verified result for commit `6565e2c` was `78 passed`; clean-room audit
+also passed. The pytest warning noise came from the installed pytest-asyncio
+version on Python 3.14, not from Taghag test failures.
+
 ## Current Divergence From The Plan
 
 The highest-risk gap is that prompt `02` is not complete, and later work was built on top of the wrong schema nouns.

@@ -6,6 +6,7 @@ from pathlib import Path
 OUT_OF_SCOPE_AUDIO_EXTENSIONS = frozenset(
     {".m4a", ".aac", ".flac", ".wav", ".aiff", ".aif", ".alac", ".ogg", ".opus", ".wma"}
 )
+PLAYLIST_EXTENSIONS = frozenset({".m3u"})
 JUNK_FILENAMES = frozenset({".DS_Store"})
 JUNK_DIRS = frozenset({"__MACOSX", ".Trashes", ".Spotlight-V100", ".fseventsd"})
 
@@ -45,6 +46,18 @@ def discover_audio_files(root: str | Path) -> tuple[list[DiscoveryRecord], list[
                     relative_path=rel,
                     extension=ext,
                     status="ready",
+                )
+            )
+            continue
+
+        if ext in PLAYLIST_EXTENSIONS:
+            skipped.append(
+                DiscoveryRecord(
+                    path=str(path),
+                    relative_path=rel,
+                    extension=ext,
+                    status="playlist",
+                    reason="playlist",
                 )
             )
             continue

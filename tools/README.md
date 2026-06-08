@@ -1,6 +1,6 @@
 # Taghag Import Tooling
 
-Standalone MP3-only import tooling for the Taghag clean-room metadata app.
+Standalone MP3-focused import tooling for the Taghag clean-room metadata app.
 ## Import Essentia metadata
 
 Validate a local `essentia-lexicon-sidecar/2` artifact and write a metadata-only
@@ -32,3 +32,7 @@ a receipt in one database-free operation:
 ```bash
 taghag-import stage --source /path/to/flacs --output /path/to/taghag-batch
 ```
+
+The discovery layer also recognizes `.m3u` playlist files alongside MP3s and
+out-of-scope audio, so they are tracked explicitly instead of being silently
+ignored.

@@ -6,7 +6,7 @@ from pathlib import Path
 OUT_OF_SCOPE_AUDIO_EXTENSIONS = frozenset(
     {".m4a", ".aac", ".flac", ".wav", ".aiff", ".aif", ".alac", ".ogg", ".opus", ".wma"}
 )
-PLAYLIST_EXTENSIONS = frozenset({".m3u"})
+PLAYLIST_EXTENSIONS = frozenset({".m3u", ".m3u8"})
 JUNK_FILENAMES = frozenset({".DS_Store"})
 JUNK_DIRS = frozenset({"__MACOSX", ".Trashes", ".Spotlight-V100", ".fseventsd"})
 
@@ -30,6 +30,9 @@ def discover_audio_files(root: str | Path) -> tuple[list[DiscoveryRecord], list[
 
     for path in sorted(root_path.rglob("*")):
         if any(part in JUNK_DIRS for part in path.parts):
+            continue
+        relative_parts = path.relative_to(root_path).parts
+        if any(part.startswith(".") for part in relative_parts):
             continue
         if not path.is_file():
             continue

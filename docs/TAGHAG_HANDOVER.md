@@ -19,14 +19,21 @@ Completed work aligns partially with prompts `01`, `03`, `04`, `06`, and `07`, b
   - optional Postman evidence parsing in `tools/taghag_import/postman_evidence.py`
   - PostgREST upload client in `tools/taghag_import/db_client.py`
   - CLI entrypoints in `tools/taghag_import/cli.py`
+- MP3 operator tooling:
+  - `audit-mp3` writes metadata-only quality reports.
+  - `dump-tags` safely summarizes all readable ID3 frames.
+  - `write-tags` defaults to dry-run and selectively preserves unknown frames.
+  - `provider-evidence` verifies exact Postman ISRC commands and writes logs
+    compatible with `import-batch --postman-evidence`.
+  - Long provider batches support `--prepare-only` so the operator can run the
+    verified command without an agent polling the batch.
 - Extracted clean-room utilities exist:
   - genre normalization via `tools/taghag_import/genre.py`
   - provider evidence parsing via `tools/taghag_import/postman_evidence.py`
 - A first React/Vite shell exists in `web/` with a placeholder UI in `web/src/App.tsx`.
-- Basic Python tests exist and currently pass:
-  - `tools/tests/test_genre.py`
-  - `tools/tests/test_postman_evidence.py`
-  - `pytest tools/tests -q` currently reports `5 passed`
+- Python tests cover the importer, MP3 audit/tag tools, provider evidence,
+  staging, transcode, analysis imports, and clean-room utilities.
+  Run `pytest tools/tests -q` from the repository root.
 - Contributor guidance now exists in `AGENTS.md`.
 
 ## Current Divergence From The Plan

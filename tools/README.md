@@ -1,6 +1,56 @@
 # Taghag Import Tooling
 
 Standalone MP3-focused import tooling for the Taghag clean-room metadata app.
+
+## Audit MP3 metadata and quality
+
+```bash
+taghag-import audit-mp3 \
+  --root /path/to/mp3s \
+  --output-dir ../artifacts/mp3_audit/manual-check
+```
+
+The command writes `mp3_audit.jsonl`, `mp3_audit.csv`, and `summary.json`.
+Reports contain ID3 and technical metadata only, including duration, bitrate,
+sample rate, channels, codec, decode status, and issue codes.
+
+## Dump and selectively write ID3 tags
+
+```bash
+taghag-import dump-tags --root /path/to/mp3s --out ../artifacts/mp3_tags.jsonl
+taghag-import write-tags --plan /path/to/path-field-value.csv
+```
+
+`write-tags` requires CSV columns `path,field,value`. It is dry-run by default;
+add `--execute` to save and `--force` to replace requested non-empty fields.
+Unknown ID3 frames and comments are preserved. Taghag does not write receipt,
+debug, or provenance text into MP3 comments.
+
+## Collect provider evidence
+
+```bash
+taghag-import provider-evidence \
+  --isrc USABC2400001 \
+  --collection /path/to/provider-evidence-collection \
+  --environment /path/to/provider-environment.json \
+  --output-dir ../artifacts/provider_evidence/manual-check
+```
+
+The runner verifies and prints a redacted Postman command, targets exact
+Spotify, TIDAL, Beatport, and Qobuz ISRC requests, and writes
+`provider_evidence.log` plus `summary.json`. The marker log can be passed
+unchanged to:
+
+```bash
+taghag-import import-batch \
+  --root /path/to/mp3s \
+  --postman-evidence ../artifacts/provider_evidence/manual-check/provider_evidence.log \
+  --no-upload
+```
+
+Use `--isrc-file` and `--prepare-only` to validate a long batch without
+launching Postman. The operator can then run the verified command directly.
+
 ## Import Essentia metadata
 
 Validate a local `essentia-lexicon-sidecar/2` artifact and write a metadata-only
@@ -33,7 +83,7 @@ a receipt in one database-free operation:
 taghag-import stage --source /path/to/flacs --output /path/to/taghag-batch
 ```
 
-The discovery layer also recognizes `.m3u` playlist files alongside MP3s and
+The discovery layer also recognizes `.m3u` and `.m3u8` playlist files alongside MP3s and
 out-of-scope audio, so they are tracked explicitly instead of being silently
 ignored.
 

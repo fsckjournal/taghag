@@ -53,27 +53,37 @@ def _year_from_date(value: str) -> str:
 
 def parse_tag_evidence(stdout: str) -> list[dict[str, object]]:
     evidences: list[dict[str, object]] = []
-    for line in stdout.splitlines():
-        marker_index = line.find(MARKER)
+    decoder = json.JSONDecoder()
+    cleaned_lines = [
+        re.sub(r"^\s*\|\s?", "", line.rstrip())
+        for line in stdout.splitlines()
+    ]
+    normalized = "".join(cleaned_lines)
+    search_from = 0
+
+    while True:
+        marker_index = normalized.find(MARKER, search_from)
         if marker_index == -1:
+            break
+        next_marker = normalized.find(MARKER, marker_index + len(MARKER))
+        segment_end = next_marker if next_marker != -1 else len(normalized)
+        brace_index = normalized.find("{", marker_index + len(MARKER), segment_end)
+        raw_marker = normalized[marker_index:segment_end].strip()
+        if brace_index == -1:
+            if raw_marker:
+                evidences.append({"status": "malformed", "raw_line": raw_marker})
+            search_from = segment_end
             continue
-        payload = line[marker_index + len(MARKER) :].strip()
-        if not payload:
-            continue
+
         try:
-            obj = json.loads(payload)
+            obj, consumed = decoder.raw_decode(normalized[brace_index:])
         except json.JSONDecodeError:
-            brace_index = payload.find("{")
-            if brace_index == -1:
-                evidences.append({"status": "malformed", "raw_line": line})
-                continue
-            try:
-                obj = json.loads(payload[brace_index:])
-            except json.JSONDecodeError:
-                evidences.append({"status": "malformed", "raw_line": line})
-                continue
+            evidences.append({"status": "malformed", "raw_line": raw_marker})
+            search_from = segment_end
+            continue
         if isinstance(obj, dict):
             evidences.append(obj)
+        search_from = brace_index + consumed
     return evidences
 
 

@@ -91,6 +91,81 @@ Upload uses the server-side Taghag env vars from [.env.example](/Users/g/Project
 taghag-import import-batch --root /path/to/mp3-library --run-name first-import
 ```
 
+## MP3 audit and tag tools
+
+Write metadata-only JSONL, CSV, and summary reports for a local MP3 tree:
+
+```bash
+cd tools
+taghag-import audit-mp3 \
+  --root /path/to/mp3-library \
+  --output-dir ../artifacts/mp3_audit/manual-check
+```
+
+The audit reuses Taghag discovery, ID3 extraction, genre normalization,
+`ffprobe`, and `ffmpeg` decode checks. It reports playlists and unsupported
+audio separately and never copies audio bytes into reports.
+
+Dump readable ID3 frames for explicit MP3s or a whole MP3 root:
+
+```bash
+taghag-import dump-tags \
+  --root /path/to/mp3-library \
+  --out ../artifacts/mp3_tags.jsonl
+```
+
+Binary frames such as artwork are summarized by byte count. To plan selective
+ID3 updates, create a CSV with `path,field,value` columns:
+
+```bash
+taghag-import write-tags --plan /path/to/updates.csv
+```
+
+`write-tags` is dry-run by default. Add `--execute` to save changes and
+`--force` only when requested fields should replace existing values. Unknown
+frames and existing comments are preserved; Taghag never writes receipts or
+debug data into comments.
+
+## Provider evidence
+
+Run exact Postman ISRC lookups and write a marker log compatible with
+`import-batch --postman-evidence`:
+
+```bash
+taghag-import provider-evidence \
+  --isrc USABC2400001 \
+  --collection /path/to/provider-evidence-collection \
+  --environment /path/to/provider-environment.json \
+  --output-dir ../artifacts/provider_evidence/manual-check
+```
+
+Set `TAGHAG_POSTMAN_COLLECTION`, `TAGHAG_POSTMAN_ENVIRONMENT`, and optionally
+`TAGHAG_POSTMAN_BIN` to avoid repeating those paths. The runner verifies the
+real binary, collection, and environment, targets the four exact Spotify,
+TIDAL, Beatport, and Qobuz ISRC requests, and writes only normalized evidence
+markers plus a metadata-only summary.
+
+For a long provider batch, verify commands without launching Postman:
+
+```bash
+taghag-import provider-evidence \
+  --isrc-file /path/to/isrcs.txt \
+  --collection /path/to/provider-evidence-collection \
+  --environment /path/to/provider-environment.json \
+  --prepare-only
+```
+
+Run the prepared command directly as the operator rather than leaving an agent
+session polling a network-bound batch. Feed a completed evidence log into the
+normal receipt-first importer:
+
+```bash
+taghag-import import-batch \
+  --root /path/to/mp3-library \
+  --postman-evidence ../artifacts/provider_evidence/manual-check/provider_evidence.log \
+  --no-upload
+```
+
 ## Essentia metadata import
 
 Taghag accepts `essentia-lexicon-sidecar/2` analysis artifacts and uploads only
@@ -120,6 +195,8 @@ and temporary analysis files are never included in database payloads.
 Taghag includes a database-free transcode command. It recursively discovers
 FLAC files, mirrors their folder structure, copies source metadata through
 FFmpeg, and writes 320 kbps MP3 files. Existing non-empty MP3 files are skipped.
+This is local preprocessing that produces MP3 inputs; FLAC remains outside
+Taghag database intake.
 
 Preview the Qobuz staging batch without writing anything:
 

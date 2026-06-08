@@ -112,3 +112,73 @@ def test_import_batch_accepts_required_flags() -> None:
     assert args.unsafe_title_artist_evidence_match is True
     assert args.verbose is True
 
+
+def test_audit_mp3_command_accepts_root_and_output() -> None:
+    args = cli.build_parser().parse_args(
+        [
+            "audit-mp3",
+            "--root",
+            "/tmp/music",
+            "--output-dir",
+            "/tmp/reports",
+        ]
+    )
+
+    assert args.root == "/tmp/music"
+    assert args.output_dir == "/tmp/reports"
+
+
+def test_dump_tags_command_accepts_one_input_source() -> None:
+    parser = cli.build_parser()
+    args = parser.parse_args(
+        [
+            "dump-tags",
+            "--path",
+            "/tmp/track.mp3",
+            "--path",
+            "/tmp/other.mp3",
+            "--out",
+            "/tmp/tags.jsonl",
+        ]
+    )
+
+    assert args.paths == ["/tmp/track.mp3", "/tmp/other.mp3"]
+    assert args.out == "/tmp/tags.jsonl"
+
+
+def test_write_tags_command_defaults_to_dry_run() -> None:
+    parser = cli.build_parser()
+    dry_run = parser.parse_args(["write-tags", "--plan", "/tmp/updates.csv"])
+    execute = parser.parse_args(
+        ["write-tags", "--plan", "/tmp/updates.csv", "--execute", "--force"]
+    )
+
+    assert dry_run.execute is False
+    assert dry_run.force is False
+    assert execute.execute is True
+    assert execute.force is True
+
+
+def test_provider_evidence_command_accepts_batch_inputs() -> None:
+    args = cli.build_parser().parse_args(
+        [
+            "provider-evidence",
+            "--isrc",
+            "USABC2400001",
+            "--isrc",
+            "GBXYZ2400002",
+            "--collection",
+            "/tmp/collection.json",
+            "--environment",
+            "/tmp/environment.json",
+            "--output-dir",
+            "/tmp/provider-evidence",
+            "--prepare-only",
+        ]
+    )
+
+    assert args.isrcs == ["USABC2400001", "GBXYZ2400002"]
+    assert args.collection == "/tmp/collection.json"
+    assert args.environment == "/tmp/environment.json"
+    assert args.output_dir == "/tmp/provider-evidence"
+    assert args.prepare_only is True

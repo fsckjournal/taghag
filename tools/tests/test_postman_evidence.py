@@ -67,6 +67,21 @@ def test_parse_malformed_json_as_evidence_warning() -> None:
     assert evidences == [{"status": "malformed", "raw_line": "[Tag Evidence JSON] not json"}]
 
 
+def test_parse_wrapped_postman_console_marker() -> None:
+    stdout = """
+  | [Tag Evidence JSON] {"schema":"tagslut.postman.tag_evidence.v1",
+  | "provider":"tidal","status":"error","lookup_isrc":"GBEYE0100042",
+  | "candidates":[]}
+""".strip()
+
+    evidences = parse_tag_evidence(stdout)
+
+    assert len(evidences) == 1
+    assert evidences[0]["provider"] == "tidal"
+    assert evidences[0]["status"] == "error"
+    assert evidences[0]["lookup_isrc"] == "GBEYE0100042"
+
+
 def test_evidence_to_row_preserves_raw_marker() -> None:
     marker = {
         "schema": "tagslut.postman.tag_evidence.v1",

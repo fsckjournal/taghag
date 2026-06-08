@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import argparse
+import csv
 from datetime import UTC, datetime
+import json
 import os
 from pathlib import Path
 from typing import Any
@@ -13,21 +15,25 @@ from .config import read_database_config
 from .db_client import TaghagDbClient
 from .discover import discover_audio_files
 from .genre import classify_genre
+from .mp3_audit import metadata_issue_codes, run_mp3_audit
 from .postman_evidence import evidence_lookup_key, evidence_to_row, parse_postman_evidence
+from .provider_runner import (
+    ProviderRunnerConfig,
+    build_postman_command,
+    display_command,
+    run_provider_batch,
+    verify_provider_config,
+)
 from .receipt import append_receipt, event, receipt_path_for_run, read_receipt, write_receipt
-from .tags import compute_file_identity, extract_mp3_tags
+from .tags import (
+    apply_mp3_tag_updates,
+    compute_file_identity,
+    dump_mp3_tags,
+    extract_mp3_tags,
+)
 from .stage import execute_stage, plan_stage, plan_stage_manifest
 from .transcode import build_transcode_plan, execute_transcode_plan
 
-
-MISSING_TAG_ISSUES = {
-    "artist": "missing_artist",
-    "title": "missing_title",
-    "bpm": "missing_bpm",
-    "musical_key": "missing_key",
-    "label": "missing_label",
-    "isrc": "missing_isrc",
-}
 
 DEFAULT_MP3_OUTPUT_ROOT = "/Volumes/LOSSY/taghag"
 
@@ -38,15 +44,6 @@ def _default_mp3_output_root() -> str:
 
 def _now() -> str:
     return datetime.now(UTC).isoformat()
-
-
-def _metadata_issue_codes(tags: dict[str, Any], canonical: dict[str, object]) -> list[str]:
-    issues = [issue for field, issue in MISSING_TAG_ISSUES.items() if not tags.get(field)]
-    if not tags.get("genre") and not canonical.get("canonical_genre"):
-        issues.append("missing_genre")
-    if not tags.get("subgenre") and not canonical.get("canonical_subgenre"):
-        issues.append("missing_subgenre")
-    return issues
 
 
 def _build_import_batch_records(
@@ -90,7 +87,7 @@ def _build_import_batch_records(
             set(
                 list(identity.get("issue_codes", []))
                 + list(probe.get("issue_codes", []))
-                + _metadata_issue_codes(tags, canonical)
+                + metadata_issue_codes(tags, canonical)
             )
         )
         for issue_code in issue_codes:
@@ -339,6 +336,191 @@ def _stage(args: argparse.Namespace) -> int:
     return 1 if result["invalid"] or result["failed"] else 0
 
 
+def _audit_mp3(args: argparse.Namespace) -> int:
+    try:
+        result = run_mp3_audit(args.root, args.output_dir)
+    except (OSError, ValueError) as exc:
+        print(f"MP3 audit failed: {exc}")
+        return 1
+
+    print(f"MP3 files:    {result.summary['mp3_files']}")
+    print(f"Skipped:      {result.summary['skipped_files']}")
+    print(f"JSONL report: {result.jsonl_path}")
+    print(f"CSV report:   {result.csv_path}")
+    print(f"Summary:      {result.summary_path}")
+    return 0
+
+
+def _explicit_mp3_path(value: str | Path) -> Path:
+    path = Path(value).expanduser().resolve()
+    if not path.is_file():
+        raise FileNotFoundError(path)
+    if path.suffix.lower() != ".mp3":
+        raise ValueError(f"not an MP3 file: {path}")
+    return path
+
+
+def _dump_input_paths(args: argparse.Namespace) -> list[Path]:
+    paths: list[Path] = []
+    if args.root:
+        found, _skipped = discover_audio_files(args.root)
+        paths.extend(Path(item.path) for item in found)
+    elif args.paths:
+        paths.extend(_explicit_mp3_path(value) for value in args.paths)
+    elif args.paths_file:
+        paths_file = Path(args.paths_file).expanduser().resolve()
+        for line in paths_file.read_text(encoding="utf-8-sig").splitlines():
+            value = line.strip()
+            if value and not value.startswith("#"):
+                paths.append(_explicit_mp3_path(value))
+
+    unique = {str(path.resolve()): path.resolve() for path in paths}
+    return [unique[key] for key in sorted(unique)]
+
+
+def _dump_tags(args: argparse.Namespace) -> int:
+    try:
+        paths = _dump_input_paths(args)
+        output = Path(args.out).expanduser().resolve()
+        output.parent.mkdir(parents=True, exist_ok=True)
+        with output.open("w", encoding="utf-8") as handle:
+            for path in paths:
+                record = {"path": str(path), "tags": dump_mp3_tags(path)}
+                handle.write(json.dumps(record, sort_keys=True) + "\n")
+    except (OSError, ValueError) as exc:
+        print(f"Tag dump failed: {exc}")
+        return 1
+
+    print(f"Wrote {len(paths)} MP3 tag record(s) to {output}")
+    return 0
+
+
+def _load_write_plan(path: str | Path) -> dict[Path, dict[str, str]]:
+    plan_path = Path(path).expanduser().resolve()
+    grouped: dict[Path, dict[str, str]] = {}
+    with plan_path.open(encoding="utf-8-sig", newline="") as handle:
+        reader = csv.DictReader(handle)
+        required = {"path", "field", "value"}
+        if not required.issubset(set(reader.fieldnames or [])):
+            raise ValueError("write plan must contain path,field,value columns")
+        for row_number, row in enumerate(reader, start=2):
+            raw_path = str(row.get("path") or "").strip()
+            field = str(row.get("field") or "").strip()
+            value = str(row.get("value") or "").strip()
+            if not raw_path or not field:
+                raise ValueError(f"invalid write plan row {row_number}")
+            file_path = _explicit_mp3_path(raw_path)
+            grouped.setdefault(file_path, {})[field] = value
+    return grouped
+
+
+def _write_tags(args: argparse.Namespace) -> int:
+    try:
+        plan = _load_write_plan(args.plan)
+        results = [
+            apply_mp3_tag_updates(
+                path,
+                updates,
+                execute=args.execute,
+                force=args.force,
+            )
+            for path, updates in sorted(plan.items(), key=lambda item: str(item[0]))
+        ]
+    except (OSError, ValueError) as exc:
+        print(f"Tag write failed: {exc}")
+        return 1
+
+    planned = sum(len(result.planned_fields) for result in results)
+    applied = sum(len(result.applied_fields) for result in results)
+    skipped = sum(len(result.skipped_fields) for result in results)
+    print(f"Files:   {len(results)}")
+    print(f"Planned: {planned}")
+    print(f"Applied: {applied}")
+    print(f"Skipped: {skipped}")
+    print(f"Mode:    {'execute' if args.execute else 'dry-run'}")
+    return 0
+
+
+def _collect_isrc_values(args: argparse.Namespace) -> list[str]:
+    values = list(args.isrcs or [])
+    if args.isrc_file:
+        source = Path(args.isrc_file).expanduser().resolve()
+        if source.suffix.lower() == ".csv":
+            with source.open(encoding="utf-8-sig", newline="") as handle:
+                for row in csv.DictReader(handle):
+                    value = row.get("isrc") or row.get("lookup_isrc")
+                    if value:
+                        values.append(str(value))
+        elif source.suffix.lower() in {".jsonl", ".json"}:
+            text = source.read_text(encoding="utf-8")
+            payloads = (
+                [json.loads(line) for line in text.splitlines() if line.strip()]
+                if source.suffix.lower() == ".jsonl"
+                else [json.loads(text)]
+            )
+            for payload in payloads:
+                if not isinstance(payload, dict):
+                    continue
+                for candidate in (
+                    payload.get("isrc"),
+                    payload.get("lookup_isrc"),
+                    (payload.get("dj_tag") or {}).get("isrc")
+                    if isinstance(payload.get("dj_tag"), dict)
+                    else None,
+                ):
+                    if candidate:
+                        values.append(str(candidate))
+                        break
+        else:
+            for line in source.read_text(encoding="utf-8-sig").splitlines():
+                value = line.strip()
+                if value and not value.startswith("#"):
+                    values.append(value)
+    if not values:
+        raise ValueError("provide --isrc or --isrc-file")
+    return values
+
+
+def _provider_evidence(args: argparse.Namespace) -> int:
+    collection = args.collection or os.environ.get("TAGHAG_POSTMAN_COLLECTION")
+    environment = args.environment or os.environ.get("TAGHAG_POSTMAN_ENVIRONMENT")
+    if not collection or not environment:
+        print(
+            "Provider evidence failed: provide --collection and --environment "
+            "or set TAGHAG_POSTMAN_COLLECTION and TAGHAG_POSTMAN_ENVIRONMENT"
+        )
+        return 1
+
+    output_dir = args.output_dir or (
+        Path("artifacts") / "provider_evidence" / datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
+    )
+    config = ProviderRunnerConfig(
+        postman_bin=args.postman_bin,
+        collection_path=Path(collection),
+        environment_path=Path(environment),
+        output_dir=Path(output_dir),
+        timeout_s=args.timeout,
+        prepare_only=args.prepare_only,
+    )
+    try:
+        isrcs = _collect_isrc_values(args)
+        verify_provider_config(config)
+        for isrc in isrcs:
+            command = build_postman_command(isrc, config)
+            print(f"Verified command: {display_command(command, config.secret_keys)}")
+        result = run_provider_batch(isrcs, config)
+    except (OSError, ValueError, json.JSONDecodeError) as exc:
+        print(f"Provider evidence failed: {exc}")
+        return 1
+
+    print(f"Evidence log: {result.evidence_log}")
+    print(f"Summary:      {result.summary_path}")
+    print(f"Succeeded:    {result.summary['succeeded']}")
+    print(f"Failed:       {result.summary['failed']}")
+    print(f"Prepared:     {result.summary['prepared']}")
+    return 1 if result.summary["failed"] else 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="taghag-import")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -419,6 +601,94 @@ def build_parser() -> argparse.ArgumentParser:
     stage_verbosity.add_argument("--verbose", dest="verbose", action="store_true", default=True)
     stage_verbosity.add_argument("--quiet", dest="verbose", action="store_false")
     stage.set_defaults(func=_stage)
+
+    audit_mp3 = subparsers.add_parser(
+        "audit-mp3",
+        help="Audit a local MP3 tree and write metadata-only reports",
+    )
+    audit_mp3.add_argument("--root", required=True, help="Local MP3 root to audit")
+    audit_mp3.add_argument(
+        "--output-dir",
+        help="Report directory (default: artifacts/mp3_audit/<timestamp>)",
+    )
+    audit_mp3.set_defaults(func=_audit_mp3)
+
+    dump_tags = subparsers.add_parser(
+        "dump-tags",
+        help="Write a metadata-only JSONL dump of MP3 ID3 frames",
+    )
+    dump_input = dump_tags.add_mutually_exclusive_group(required=True)
+    dump_input.add_argument("--root", help="Discover MP3 files under this root")
+    dump_input.add_argument(
+        "--path",
+        dest="paths",
+        action="append",
+        help="Explicit MP3 path; repeat for multiple files",
+    )
+    dump_input.add_argument("--paths-file", help="Text file containing one MP3 path per line")
+    dump_tags.add_argument("--out", required=True, help="Output JSONL path")
+    dump_tags.set_defaults(func=_dump_tags)
+
+    write_tags = subparsers.add_parser(
+        "write-tags",
+        help="Apply a path,field,value CSV plan to MP3 ID3 tags",
+    )
+    write_tags.add_argument("--plan", required=True, help="CSV plan with path,field,value columns")
+    write_tags.add_argument(
+        "--execute",
+        action="store_true",
+        help="Write ID3 changes; default is dry-run",
+    )
+    write_tags.add_argument(
+        "--force",
+        action="store_true",
+        help="Overwrite requested non-empty fields",
+    )
+    write_tags.set_defaults(func=_write_tags)
+
+    provider_evidence = subparsers.add_parser(
+        "provider-evidence",
+        help="Run exact Postman ISRC lookups and write an importer-compatible evidence log",
+    )
+    provider_evidence.add_argument(
+        "--isrc",
+        dest="isrcs",
+        action="append",
+        help="ISRC to resolve; repeat for multiple tracks",
+    )
+    provider_evidence.add_argument(
+        "--isrc-file",
+        help="Text, CSV, JSON, or JSONL file containing ISRC values",
+    )
+    provider_evidence.add_argument(
+        "--collection",
+        help="Postman collection file/directory (or TAGHAG_POSTMAN_COLLECTION)",
+    )
+    provider_evidence.add_argument(
+        "--environment",
+        help="Postman environment file (or TAGHAG_POSTMAN_ENVIRONMENT)",
+    )
+    provider_evidence.add_argument(
+        "--postman-bin",
+        default=os.environ.get("TAGHAG_POSTMAN_BIN", "postman"),
+        help="Postman CLI executable",
+    )
+    provider_evidence.add_argument(
+        "--output-dir",
+        help="Output directory (default: artifacts/provider_evidence/<timestamp>)",
+    )
+    provider_evidence.add_argument(
+        "--timeout",
+        type=int,
+        default=90,
+        help="Per-ISRC Postman timeout in seconds",
+    )
+    provider_evidence.add_argument(
+        "--prepare-only",
+        action="store_true",
+        help="Verify and print commands without running the provider batch",
+    )
+    provider_evidence.set_defaults(func=_provider_evidence)
 
     return parser
 

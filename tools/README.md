@@ -51,6 +51,17 @@ taghag-import import-batch \
 Use `--isrc-file` and `--prepare-only` to validate a long batch without
 launching Postman. The operator can then run the verified command directly.
 
+## Backfill the legacy DJ slice
+
+```bash
+taghag-import extract-dj-slice --sqlite-db /path/to/music_v3.db --verbose
+```
+
+This command reads the legacy SQLite snapshot in read-only mode and upserts
+matching rows into `audio_file` and `dj_tag`. It requires a Postgres connection
+string via `DB_POSTGRES_URL` or `TAGHAG_DB_POSTGRES_URL` plus
+`TAGHAG_OWNER_USER_ID`.
+
 ## Import Essentia metadata
 
 Validate a local `essentia-lexicon-sidecar/2` artifact and write a metadata-only

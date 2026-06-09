@@ -1,26 +1,26 @@
 # Taghag
 
-Taghag is a clean-room, MP3-only private DJ metadata app. It keeps MP3 files on local disks and stores only metadata, tagging decisions, crate organization, and import receipts in the database.
+Taghag is a clean-room, multi-format private DJ metadata app. It keeps audio files on local disks and stores only metadata, tagging decisions, crate organization, and import receipts in the database.
 
 ## What Taghag is
 
-Taghag is a private control surface for DJs who want to scan local MP3 libraries, normalize metadata, review tag evidence, and organize tracks into crates and saved views.
+Taghag is a private control surface for DJs who want to scan local audio libraries, normalize metadata, review tag evidence, and organize tracks into crates and saved views.
 
 ## What it refuses to inherit
 
-This repository does not inherit legacy schema design, code imports, or mixed-format assumptions from the old tagslut project. Taghag is a fresh schema and app boundary built specifically for MP3-first metadata workflows.
+This repository does not inherit legacy schema design, code imports, or mixed-format assumptions from the old tagslut project. Taghag is a fresh schema and app boundary built specifically for audio-first metadata workflows.
 
-## MP3-only v1 scope
+## Multi-format scope
 
-Version 1 accepts `.mp3` files only. FLAC, AAC, M4A, ALAC, and other non-MP3 formats are treated as out of scope and are reported as skipped during discovery.
+Taghag accepts `.mp3` and `.flac` files, including robust local staging and deduplication for FLAC-to-MP3 transcoding.
 
 ## Metadata-only database model
 
-The database stores import runs, MP3 file metadata, DJ tags, tag evidence, quality checks, crates, crate membership, and saved views. It does not store binary audio assets.
+The database stores import runs, audio file metadata, DJ tags, tag evidence, quality checks, crates, crate membership, and saved views. It does not store binary audio assets.
 
 ## Local files remain local
 
-Taghag never uploads or deletes local MP3 files. Import receipts reference local paths for operator use, while the database stores metadata only.
+Taghag never uploads or deletes local audio files. Import receipts reference local paths for operator use, while the database stores metadata only.
 
 ## Server-only key never goes to frontend
 
@@ -32,7 +32,7 @@ All SQL changes belong in source-controlled migrations under [supabase/migration
 
 ## Supabase setup assumptions
 
-Taghag is Supabase-backed metadata software. It is not a SQLite app unless a future task explicitly changes that direction. Local MP3 files remain local, while Supabase stores metadata, tags, crates, and import receipts.
+Taghag is Supabase-backed metadata software. It is not a SQLite app unless a future task explicitly changes that direction. Local audio files remain local, while Supabase stores metadata, tags, crates, and import receipts.
 
 Docker is required only when running the local Supabase CLI stack. In particular, verification with `supabase db reset` expects Docker because it starts and resets a local Supabase/Postgres environment.
 
@@ -78,39 +78,39 @@ cd ../web && npm install && npm run build
 
 ## First import flow
 
-Scan a local MP3 tree, write a JSONL receipt, and skip upload:
+Scan a local audio tree, write a JSONL receipt, and skip upload:
 
 ```bash
 cd tools
-taghag-import import-batch --root /path/to/mp3-library --run-name first-import --no-upload
+taghag-import import-batch --root /path/to/audio-library --run-name first-import --no-upload
 ```
 
 Upload uses the server-side Taghag env vars from [.env.example](/Users/g/Projects/taghag/.env.example):
 
 ```bash
-taghag-import import-batch --root /path/to/mp3-library --run-name first-import
+taghag-import import-batch --root /path/to/audio-library --run-name first-import
 ```
 
-## MP3 audit and tag tools
+## Audio audit and tag tools
 
-Write metadata-only JSONL, CSV, and summary reports for a local MP3 tree:
+Write metadata-only JSONL, CSV, and summary reports for a local audio tree:
 
 ```bash
 cd tools
 taghag-import audit-mp3 \
-  --root /path/to/mp3-library \
-  --output-dir ../artifacts/mp3_audit/manual-check
+  --root /path/to/audio-library \
+  --output-dir ../artifacts/audio_audit/manual-check
 ```
 
 The audit reuses Taghag discovery, ID3 extraction, genre normalization,
 `ffprobe`, and `ffmpeg` decode checks. It reports playlists and unsupported
 audio separately and never copies audio bytes into reports.
 
-Dump readable ID3 frames for explicit MP3s or a whole MP3 root:
+Dump readable ID3/Vorbis frames for explicit audio files or a whole audio root:
 
 ```bash
 taghag-import dump-tags \
-  --root /path/to/mp3-library \
+  --root /path/to/audio-library \
   --out ../artifacts/mp3_tags.jsonl
 ```
 
@@ -173,7 +173,7 @@ metadata. MP3 audio remains on local disks.
 
 Each track should include its Taghag `file_key`. For migration artifacts that
 predate Taghag, the importer can calculate the key when the referenced local
-MP3 path still exists.
+audio path still exists.
 
 Write and inspect a receipt without contacting Supabase:
 
@@ -185,7 +185,7 @@ taghag-import import-analysis \
   --no-upload
 ```
 
-Remove `--no-upload` to resolve each `file_key` against an existing `mp3_file`
+Remove `--no-upload` to resolve each `file_key` against an existing `audio_file`
 row and upsert the five Magikbox attributes, genre candidates, model metadata,
 and source-artifact digest into `track_analysis`. Audio bytes, model inputs,
 and temporary analysis files are never included in database payloads.

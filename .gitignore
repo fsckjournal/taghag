@@ -14,3 +14,11 @@ dist/
 coverage/
 receipts/
 artifacts/
+
+# Temp and Scratch Files
+supabase/.temp/
+*.csv
+*.m3u
+*.m3u8
+*.log
+tools/out.txt

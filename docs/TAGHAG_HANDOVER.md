@@ -12,11 +12,12 @@ The foundational implementation is effectively complete through Prompt 08 (`tagh
 
 - Prompt library and master plan are present under `docs/` and `.github/prompts/`.
 - The database schema (Prompt 02) has been fully corrected. The `mp3_track` legacy table was removed and correctly replaced with `mp3_file`. All 9 core tables (including `mp3_observation`) exist with proper RLS policies and grants.
-- A Python importer package exists in `tools/taghag_import/` and uses the receipt-first flow (Prompt 03) targeting `mp3_file`.
+- A Python importer package exists in `tools/taghag_import/` and uses the receipt-first flow (Prompt 03) targeting `audio_file`.
 - A React/Vite shell exists in `web/` with routing, and it is successfully wired to generated Supabase database types from Prompt 05 (`web/src/lib/database.types.ts`).
 - Extracted clean-room utilities exist:
   - genre normalization via `tools/taghag_import/genre.py`
   - provider evidence parsing via `tools/taghag_import/postman_evidence.py`
+- Legacy DJ-slice backfill is handled by `tools/taghag_import/extract_dj_slice.py` using read-only SQLite input and Supabase `audio_file`/`dj_tag` upserts.
 - MP3 operator tooling:
   - `audit-mp3`, `dump-tags`, `write-tags`, `provider-evidence`, `transcode`, and `stage` are functional.
 - Python tests cover the importer, MP3 audit/tag tools, provider evidence, staging, transcode, analysis imports, and clean-room utilities.

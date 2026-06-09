@@ -17,6 +17,7 @@ from .discover import discover_audio_files
 from .genre import classify_genre
 from .audio_audit import metadata_issue_codes, run_audio_audit
 from .postman_evidence import evidence_lookup_key, evidence_to_row, parse_postman_evidence
+from .extract_dj_slice import extract_dj_slice
 from .provider_runner import (
     ProviderRunnerConfig,
     build_postman_command,
@@ -557,6 +558,33 @@ def _provider_evidence(args: argparse.Namespace) -> int:
     return 1 if result.summary["failed"] else 0
 
 
+def _extract_dj_slice_command(args: argparse.Namespace) -> int:
+    try:
+        summary = extract_dj_slice(args.sqlite_db)
+    except (OSError, RuntimeError, ValueError) as exc:
+        print(f"DJ slice backfill failed: {exc}")
+        return 1
+
+    if args.verbose:
+        print(
+            "read={read} eligible={eligible} inserted_audio_file={audio} inserted_dj_tag={tag} "
+            "skipped={skipped} skipped_missing_identity={missing} skipped_file_key_conflicts={conflicts}".format(
+                read=summary.source_rows,
+                eligible=summary.eligible_rows,
+                audio=summary.inserted_audio_files,
+                tag=summary.inserted_dj_tags,
+                skipped=summary.skipped_rows,
+                missing=summary.skipped_missing_identity,
+                conflicts=summary.skipped_file_key_conflicts,
+            )
+        )
+    else:
+        print(
+            f"read={summary.source_rows} inserted={summary.inserted_audio_files} skipped={summary.skipped_rows}"
+        )
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="taghag-import")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -727,6 +755,22 @@ def build_parser() -> argparse.ArgumentParser:
         help="Verify and print commands without running the provider batch",
     )
     provider_evidence.set_defaults(func=_provider_evidence)
+
+    extract_dj_slice_parser = subparsers.add_parser(
+        "extract-dj-slice",
+        help="Backfill the legacy DJ slice from music_v3.db into audio_file and dj_tag",
+    )
+    extract_dj_slice_parser.add_argument(
+        "--sqlite-db",
+        required=True,
+        help="Path to the legacy music_v3.db SQLite database",
+    )
+    extract_dj_slice_parser.add_argument(
+        "--verbose",
+        action="store_true",
+        help="Print a compact summary after completion",
+    )
+    extract_dj_slice_parser.set_defaults(func=_extract_dj_slice_command)
 
     return parser
 

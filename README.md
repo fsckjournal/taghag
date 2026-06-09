@@ -26,6 +26,8 @@ Taghag never uploads or deletes local audio files. Import receipts reference loc
 
 The importer reads server-side upload credentials from environment variables only. Frontend code must use frontend-safe variables only and must never embed a server-only key.
 
+The legacy DJ-slice backfill extractor also needs a Postgres connection string in `DB_POSTGRES_URL` or `TAGHAG_DB_POSTGRES_URL` so it can write through `psycopg2`.
+
 ## Source-controlled migrations
 
 All SQL changes belong in source-controlled migrations under [supabase/migrations](/Users/g/Projects/taghag/supabase/migrations).
@@ -90,6 +92,17 @@ Upload uses the server-side Taghag env vars from [.env.example](/Users/g/Project
 ```bash
 taghag-import import-batch --root /path/to/audio-library --run-name first-import
 ```
+
+## Legacy DJ slice backfill
+
+Extract the core MP3 DJ slice from a legacy `music_v3.db` snapshot and upsert it into the clean-room `audio_file` and `dj_tag` tables:
+
+```bash
+cd tools
+taghag-import extract-dj-slice --sqlite-db /path/to/music_v3.db --verbose
+```
+
+This path opens the SQLite source in read-only mode and requires `DB_POSTGRES_URL` or `TAGHAG_DB_POSTGRES_URL` plus `TAGHAG_OWNER_USER_ID`.
 
 ## Audio audit and tag tools
 

@@ -182,3 +182,17 @@ def test_provider_evidence_command_accepts_batch_inputs() -> None:
     assert args.environment == "/tmp/environment.json"
     assert args.output_dir == "/tmp/provider-evidence"
     assert args.prepare_only is True
+
+
+def test_extract_dj_slice_command_accepts_sqlite_db_and_verbose() -> None:
+    args = cli.build_parser().parse_args(
+        [
+            "extract-dj-slice",
+            "--sqlite-db",
+            "/tmp/music_v3.db",
+            "--verbose",
+        ]
+    )
+
+    assert args.sqlite_db == "/tmp/music_v3.db"
+    assert args.verbose is True

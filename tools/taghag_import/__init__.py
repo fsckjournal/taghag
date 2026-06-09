@@ -10,6 +10,7 @@ __all__ = [
     "postman_evidence",
     "receipt",
     "db_client",
+    "extract_dj_slice",
     "transcode",
     "flac",
     "stage",

@@ -33,7 +33,8 @@ def load_failure_ledger(ledger_path: Path) -> set[Path]:
                 if "source" in payload:
                     failures.add(Path(payload["source"]).expanduser().resolve())
             except json.JSONDecodeError:
-                pass
+                # Ignore malformed ledger lines and continue parsing the rest.
+                continue
     return failures
 
 

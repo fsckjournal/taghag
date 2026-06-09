@@ -5,7 +5,6 @@ from hashlib import sha256
 import json
 import math
 from pathlib import Path
-from typing import Any
 
 from .tags import compute_file_identity
 

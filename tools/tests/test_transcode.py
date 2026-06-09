@@ -45,7 +45,7 @@ def test_execute_transcode_plan_dry_run_writes_nothing(tmp_path: Path) -> None:
 
     result = execute_transcode_plan(plan, dry_run=True)
 
-    assert result == {"planned": 1, "transcoded": 0, "existing": 0, "failed": 0}
+    assert result == {"planned": 1, "transcoded": 0, "existing": 0, "failed": 0, "failed-skipped": 0}
     assert not output.exists()
 
 

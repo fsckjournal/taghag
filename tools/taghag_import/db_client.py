@@ -84,19 +84,19 @@ class TaghagDbClient:
     def upsert_import_run(self, import_run: dict[str, object]) -> None:
         self._postgrest_request("import_run", [import_run], on_conflict="id")
 
-    def upsert_mp3_files(self, files: list[dict[str, object]]) -> list[dict[str, object]]:
+    def upsert_audio_files(self, files: list[dict[str, object]]) -> list[dict[str, object]]:
         return self._postgrest_request(
-            "mp3_file",
+            "audio_file",
             files,
             on_conflict="owner_user_id,file_key",
             return_rows=True,
         )
 
     def insert_observations(self, observations: list[dict[str, object]]) -> None:
-        self._postgrest_request("mp3_observation", observations)
+        self._postgrest_request("audio_observation", observations)
 
     def upsert_dj_tags(self, tags: list[dict[str, object]]) -> None:
-        self._postgrest_request("dj_tag", tags, on_conflict="owner_user_id,mp3_file_id")
+        self._postgrest_request("dj_tag", tags, on_conflict="owner_user_id,audio_file_id")
 
     def insert_quality_checks(self, checks: list[dict[str, object]]) -> None:
         self._postgrest_request("quality_check", checks)
@@ -108,10 +108,10 @@ class TaghagDbClient:
         self._postgrest_request(
             "track_analysis",
             analysis_rows,
-            on_conflict="owner_user_id,mp3_file_id,schema_name,source_artifact_sha256",
+            on_conflict="owner_user_id,audio_file_id,schema_name,source_artifact_sha256",
         )
 
-    def _mp3_file_ids_for_file_keys(self, file_keys: set[str]) -> dict[str, str]:
+    def _audio_file_ids_for_file_keys(self, file_keys: set[str]) -> dict[str, str]:
         if not file_keys:
             return {}
         rows: list[dict[str, object]] = []
@@ -120,7 +120,7 @@ class TaghagDbClient:
             quoted = ",".join(f'"{key}"' for key in sorted_keys[offset : offset + 50])
             rows.extend(
                 self._get_postgrest_rows(
-                    "mp3_file",
+                    "audio_file",
                     {
                         "select": "id,file_key",
                         "owner_user_id": f"eq.{self._config.owner_user_id}",
@@ -139,19 +139,19 @@ class TaghagDbClient:
             raise RuntimeError("TAGHAG_OWNER_USER_ID is required")
         owner_user_id = self._config.owner_user_id
         analysis_events = [record for record in records if record.get("event_type") == "track_analysis"]
-        file_ids = self._mp3_file_ids_for_file_keys({str(record.get("file_key")) for record in analysis_events})
+        file_ids = self._audio_file_ids_for_file_keys({str(record.get("file_key")) for record in analysis_events})
 
         analysis_rows: list[dict[str, object]] = []
         unmatched = 0
         for record in analysis_events:
             file_key = str(record.get("file_key") or "")
-            mp3_file_id = file_ids.get(file_key)
-            if not mp3_file_id:
+            audio_file_id = file_ids.get(file_key)
+            if not audio_file_id:
                 unmatched += 1
                 continue
             row = dict(record["track_analysis"])  # type: ignore[index]
             row["owner_user_id"] = owner_user_id
-            row["mp3_file_id"] = mp3_file_id
+            row["audio_file_id"] = audio_file_id
             analysis_rows.append(row)
 
         self.upsert_track_analysis(analysis_rows)
@@ -163,7 +163,7 @@ class TaghagDbClient:
         owner_user_id = self._config.owner_user_id
 
         import_run_rows: list[dict[str, object]] = []
-        mp3_file_rows: list[dict[str, object]] = []
+        audio_file_rows: list[dict[str, object]] = []
         observation_events: list[dict[str, object]] = []
         dj_tag_events: list[dict[str, object]] = []
         quality_events: list[dict[str, object]] = []
@@ -175,10 +175,10 @@ class TaghagDbClient:
                 row = dict(record["import_run"])  # type: ignore[index]
                 row["owner_user_id"] = owner_user_id
                 import_run_rows.append(row)
-            elif event_type == "mp3_observed":
-                file_row = dict(record["mp3_file"])  # type: ignore[index]
+            elif event_type == "audio_observed":
+                file_row = dict(record["audio_file"])  # type: ignore[index]
                 file_row["owner_user_id"] = owner_user_id
-                mp3_file_rows.append(file_row)
+                audio_file_rows.append(file_row)
                 observation_events.append(record)
                 dj_tag_events.append(record)
             elif event_type == "quality_check":
@@ -190,7 +190,7 @@ class TaghagDbClient:
             raise RuntimeError("receipt is missing import_run_start event")
 
         self.upsert_import_run(import_run_rows[0])
-        returned_files = self.upsert_mp3_files(mp3_file_rows)
+        returned_files = self.upsert_audio_files(audio_file_rows)
         file_ids = {
             str(row.get("file_key")): str(row.get("id"))
             for row in returned_files
@@ -200,40 +200,40 @@ class TaghagDbClient:
         observations: list[dict[str, object]] = []
         dj_tags: list[dict[str, object]] = []
         for record in observation_events:
-            file_key = str(dict(record["mp3_file"])["file_key"])  # type: ignore[index]
-            mp3_file_id = file_ids.get(file_key)
-            if not mp3_file_id:
+            file_key = str(dict(record["audio_file"])["file_key"])  # type: ignore[index]
+            audio_file_id = file_ids.get(file_key)
+            if not audio_file_id:
                 continue
-            observation = dict(record["mp3_observation"])  # type: ignore[index]
+            observation = dict(record["audio_observation"])  # type: ignore[index]
             observation["owner_user_id"] = owner_user_id
-            observation["mp3_file_id"] = mp3_file_id
+            observation["audio_file_id"] = audio_file_id
             observations.append(observation)
 
             tag = dict(record["dj_tag"])  # type: ignore[index]
             tag["owner_user_id"] = owner_user_id
-            tag["mp3_file_id"] = mp3_file_id
+            tag["audio_file_id"] = audio_file_id
             dj_tags.append(tag)
 
         quality_checks: list[dict[str, object]] = []
         for record in quality_events:
             file_key = str(record.get("file_key") or "")
-            mp3_file_id = file_ids.get(file_key)
-            if not mp3_file_id:
+            audio_file_id = file_ids.get(file_key)
+            if not audio_file_id:
                 continue
             row = dict(record["quality_check"])  # type: ignore[index]
             row["owner_user_id"] = owner_user_id
-            row["mp3_file_id"] = mp3_file_id
+            row["audio_file_id"] = audio_file_id
             quality_checks.append(row)
 
         evidence_rows: list[dict[str, object]] = []
         for record in evidence_events:
             file_key = str(record.get("file_key") or "")
-            mp3_file_id = file_ids.get(file_key)
-            if not mp3_file_id:
+            audio_file_id = file_ids.get(file_key)
+            if not audio_file_id:
                 continue
             row = dict(record["tag_evidence"])  # type: ignore[index]
             row["owner_user_id"] = owner_user_id
-            row["mp3_file_id"] = mp3_file_id
+            row["audio_file_id"] = audio_file_id
             evidence_rows.append(row)
 
         self.insert_observations(observations)
@@ -243,8 +243,8 @@ class TaghagDbClient:
 
         return {
             "import_run": 1,
-            "mp3_file": len(mp3_file_rows),
-            "mp3_observation": len(observations),
+            "audio_file": len(audio_file_rows),
+            "audio_observation": len(observations),
             "dj_tag": len(dj_tags),
             "quality_check": len(quality_checks),
             "tag_evidence": len(evidence_rows),

@@ -15,7 +15,7 @@ from .config import read_database_config
 from .db_client import TaghagDbClient
 from .discover import discover_audio_files
 from .genre import classify_genre
-from .mp3_audit import metadata_issue_codes, run_mp3_audit
+from .audio_audit import metadata_issue_codes, run_audio_audit
 from .postman_evidence import evidence_lookup_key, evidence_to_row, parse_postman_evidence
 from .provider_runner import (
     ProviderRunnerConfig,
@@ -24,6 +24,7 @@ from .provider_runner import (
     run_provider_batch,
     verify_provider_config,
 )
+from .flac import extract_flac_tags
 from .receipt import append_receipt, event, receipt_path_for_run, read_receipt, write_receipt
 from .tags import (
     apply_mp3_tag_updates,
@@ -36,6 +37,20 @@ from .transcode import build_transcode_plan, execute_transcode_plan
 
 
 DEFAULT_MP3_OUTPUT_ROOT = "/Volumes/LOSSY/taghag"
+
+
+def _extract_tags(path: str | Path) -> dict[str, Any]:
+    """Dispatch to the right tag reader based on file extension."""
+    if Path(path).suffix.lower() == ".flac":
+        tags = extract_flac_tags(path)
+        # Normalize: add fields expected by the pipeline that flac.py doesn't set
+        tags.setdefault("year", None)
+        tags.setdefault("rating", None)
+        tags.setdefault("energy", None)
+        tags.setdefault("composer", None)
+        tags.setdefault("raw_id3", {})
+        return tags
+    return extract_mp3_tags(path)
 
 
 def _default_mp3_output_root() -> str:
@@ -79,7 +94,7 @@ def _build_import_batch_records(
     issue_counts: dict[str, int] = {}
 
     for item in found:
-        tags = extract_mp3_tags(item.path)
+        tags = _extract_tags(item.path)
         identity = compute_file_identity(item.path, item.relative_path)
         probe = probe_mp3(item.path)
         canonical = classify_genre(tags.get("genre") or tags.get("subgenre"))
@@ -99,7 +114,7 @@ def _build_import_batch_records(
         if tags.get("title") and tags.get("artist"):
             file_keys_by_title_artist[(str(tags["title"]).casefold(), str(tags["artist"]).casefold())] = file_key
 
-        mp3_file = {
+        audio_file = {
             "file_key": file_key,
             "path": item.path,
             "filename": Path(item.path).name,
@@ -107,7 +122,7 @@ def _build_import_batch_records(
             "mtime_ns": identity["mtime_ns"],
             "duration_s": probe["duration_s"],
             "bitrate_kbps": probe["bitrate_kbps"],
-            "codec": "mp3",
+            "codec": "flac" if Path(item.path).suffix.lower() == ".flac" else "mp3",
             "checksum_sha256": identity["checksum_sha256"],
             "checksum_prefix": identity["checksum_prefix"],
             "identity_source": identity["identity_source"],
@@ -120,7 +135,7 @@ def _build_import_batch_records(
             "album": tags.get("album"),
             "label": tags.get("label"),
             "catalog_number": tags.get("catalog_number"),
-            "release_date": tags.get("release_date"),
+            "release_date": (tags.get("release_date") + "-01-01" if len(str(tags.get("release_date") or "")) == 4 else (tags.get("release_date") + "-01" if len(str(tags.get("release_date") or "")) == 7 else tags.get("release_date"))) if tags.get("release_date") else None,
             "year": int(str(tags["year"])[:4]) if str(tags.get("year") or "")[:4].isdigit() else None,
             "bpm": float(tags["bpm"]) if str(tags.get("bpm") or "").replace(".", "", 1).isdigit() else None,
             "musical_key": tags.get("musical_key"),
@@ -132,7 +147,7 @@ def _build_import_batch_records(
             "energy": tags.get("energy"),
             "tag_source": "local_id3",
         }
-        mp3_observation = {
+        audio_observation = {
             "import_run_id": run_id,
             "observed_path": item.path,
             "observed_size_bytes": identity["size_bytes"],
@@ -143,14 +158,14 @@ def _build_import_batch_records(
         }
         records.append(
             event(
-                "mp3_observed",
+                "audio_observed",
                 run_id=run_id,
                 file_key=file_key,
                 path=item.path,
                 relative_path=item.relative_path,
                 raw_id3=tags.get("raw_id3", {}),
-                mp3_file=mp3_file,
-                mp3_observation=mp3_observation,
+                audio_file=audio_file,
+                audio_observation=audio_observation,
                 dj_tag=dj_tag,
             )
         )
@@ -210,7 +225,7 @@ def _build_import_batch_records(
             "import_run_summary",
             run_id=run_id,
             summary={
-                "mp3_observed": observed_count,
+                "audio_observed": observed_count,
                 "out_of_scope_audio": len(skipped),
                 "issue_counts": issue_counts,
             },
@@ -291,9 +306,20 @@ def _import_analysis(args: argparse.Namespace) -> int:
 
 
 def _transcode(args: argparse.Namespace) -> int:
+    output_root = Path(args.output).expanduser().resolve()
+    failure_ledger = output_root / "reports" / "transcode_failures.jsonl"
+    state_file = output_root / "reports" / "transcode_state.json"
+    
     try:
-        plan = build_transcode_plan(args.source, args.output)
-        result = execute_transcode_plan(plan, dry_run=args.dry_run, verbose=args.verbose)
+        plan = build_transcode_plan(args.source, args.output, failure_ledger_path=failure_ledger)
+        result = execute_transcode_plan(
+            plan, 
+            dry_run=args.dry_run, 
+            verbose=args.verbose, 
+            workers=args.workers,
+            state_file_path=state_file,
+            failure_ledger_path=failure_ledger,
+        )
     except (OSError, ValueError) as exc:
         print(f"Transcode planning failed: {exc}")
         return 1
@@ -310,12 +336,22 @@ def _transcode(args: argparse.Namespace) -> int:
 
 
 def _stage(args: argparse.Namespace) -> int:
+    output_root = Path(args.output).expanduser().resolve()
+    failure_ledger = output_root / "reports" / "transcode_failures.jsonl"
+    state_file = output_root / "reports" / "transcode_state.json"
     try:
         if args.manifest:
-            plan = plan_stage_manifest(args.manifest, args.output)
+            plan = plan_stage_manifest(args.manifest, args.output, failure_ledger_path=failure_ledger)
         else:
-            plan = plan_stage(args.source, args.output)
-        result = execute_stage(plan, dry_run=args.dry_run, verbose=args.verbose)
+            plan = plan_stage(args.source, args.output, failure_ledger_path=failure_ledger)
+        result = execute_stage(
+            plan, 
+            dry_run=args.dry_run, 
+            verbose=args.verbose,
+            workers=args.workers,
+            state_file_path=state_file,
+            failure_ledger_path=failure_ledger,
+        )
     except (OSError, RuntimeError, ValueError) as exc:
         print(f"Stage failed: {exc}")
         return 1
@@ -338,12 +374,12 @@ def _stage(args: argparse.Namespace) -> int:
 
 def _audit_mp3(args: argparse.Namespace) -> int:
     try:
-        result = run_mp3_audit(args.root, args.output_dir)
+        result = run_audio_audit(args.root, args.output_dir)
     except (OSError, ValueError) as exc:
         print(f"MP3 audit failed: {exc}")
         return 1
 
-    print(f"MP3 files:    {result.summary['mp3_files']}")
+    print(f"MP3 files:    {result.summary['audio_files']}")
     print(f"Skipped:      {result.summary['skipped_files']}")
     print(f"JSONL report: {result.jsonl_path}")
     print(f"CSV report:   {result.csv_path}")
@@ -582,6 +618,7 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_false",
         help="Print summary only",
     )
+    transcode.add_argument("--workers", type=int, help="Number of concurrent transcode workers (default: min(cpu_count, 8))")
     transcode.set_defaults(func=_transcode)
 
     stage = subparsers.add_parser(
@@ -600,6 +637,7 @@ def build_parser() -> argparse.ArgumentParser:
     stage_verbosity = stage.add_mutually_exclusive_group()
     stage_verbosity.add_argument("--verbose", dest="verbose", action="store_true", default=True)
     stage_verbosity.add_argument("--quiet", dest="verbose", action="store_false")
+    stage.add_argument("--workers", type=int, help="Number of concurrent transcode workers (default: min(cpu_count, 8))")
     stage.set_defaults(func=_stage)
 
     audit_mp3 = subparsers.add_parser(
@@ -609,7 +647,7 @@ def build_parser() -> argparse.ArgumentParser:
     audit_mp3.add_argument("--root", required=True, help="Local MP3 root to audit")
     audit_mp3.add_argument(
         "--output-dir",
-        help="Report directory (default: artifacts/mp3_audit/<timestamp>)",
+        help="Report directory (default: artifacts/audio_audit/<timestamp>)",
     )
     audit_mp3.set_defaults(func=_audit_mp3)
 

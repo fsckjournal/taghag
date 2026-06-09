@@ -65,7 +65,7 @@ def test_magikbox_migration_creates_secured_track_analysis_table() -> None:
     sql = migration.read_text(encoding="utf-8").lower()
 
     assert "create table public.track_analysis" in sql
-    assert "foreign key (mp3_file_id, owner_user_id)" in sql
+    assert "foreign key (audio_file_id, owner_user_id)" in sql
     assert "enable row level security" in sql
     assert "to authenticated" in sql
     assert "to service_role" in sql

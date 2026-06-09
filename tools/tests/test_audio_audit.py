@@ -4,10 +4,10 @@ import csv
 import json
 from pathlib import Path
 
-from taghag_import import mp3_audit
+from taghag_import import audio_audit
 
 
-def test_run_mp3_audit_writes_metadata_only_reports(
+def test_run_audio_audit_writes_metadata_only_reports(
     tmp_path: Path, monkeypatch
 ) -> None:
     root = tmp_path / "music"
@@ -17,7 +17,7 @@ def test_run_mp3_audit_writes_metadata_only_reports(
     (root / "source.flac").write_bytes(b"flac-audio-bytes")
 
     monkeypatch.setattr(
-        mp3_audit,
+        audio_audit,
         "extract_mp3_tags",
         lambda path: {
             "artist": "Artist",
@@ -41,7 +41,7 @@ def test_run_mp3_audit_writes_metadata_only_reports(
         },
     )
     monkeypatch.setattr(
-        mp3_audit,
+        audio_audit,
         "probe_mp3",
         lambda path: {
             "duration_s": 180.5,
@@ -59,7 +59,7 @@ def test_run_mp3_audit_writes_metadata_only_reports(
         },
     )
     monkeypatch.setattr(
-        mp3_audit,
+        audio_audit,
         "classify_genre",
         lambda value: {
             "canonical_genre": "House",
@@ -67,19 +67,19 @@ def test_run_mp3_audit_writes_metadata_only_reports(
         },
     )
 
-    result = mp3_audit.run_mp3_audit(root, tmp_path / "reports")
+    result = audio_audit.run_audio_audit(root, tmp_path / "reports")
 
-    assert result.summary["mp3_files"] == 1
-    assert result.summary["skipped_files"] == 1
-    assert result.summary["issue_counts"] == {"missing_label": 1}
+    assert result.summary["audio_files"] == 2
+    assert result.summary["skipped_files"] == 0
+    assert result.summary["issue_counts"] == {"missing_label": 2}
 
     records = [
         json.loads(line)
         for line in result.jsonl_path.read_text(encoding="utf-8").splitlines()
     ]
     assert [record["event_type"] for record in records] == [
-        "mp3_audit",
-        "skipped_input",
+        "audio_audit",
+        "audio_audit",
     ]
     assert records[0]["canonical_genre"] == "House"
     assert records[0]["canonical_subgenre"] == "Deep House"
@@ -112,7 +112,7 @@ def test_metadata_issue_codes_reuses_import_batch_contract() -> None:
         "subgenre": "",
     }
 
-    issues = mp3_audit.metadata_issue_codes(tags, {})
+    issues = audio_audit.metadata_issue_codes(tags, {})
 
     assert issues == [
         "missing_artist",

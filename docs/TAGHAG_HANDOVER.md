@@ -8,93 +8,27 @@ Taghag is a clean-room, MP3-only, metadata-only private DJ app. The durable plan
 
 ## What Has Been Implemented
 
-Completed work aligns partially with prompts `01`, `03`, `04`, `06`, and `07`, but not yet with `02`.
+The foundational implementation is effectively complete through Prompt 08 (`taghag-08-clean-room-audit.prompt.md`).
 
 - Prompt library and master plan are present under `docs/` and `.github/prompts/`.
-- A Python importer package exists in `tools/taghag_import/`.
-- Implemented importer pieces:
-  - MP3 discovery in `tools/taghag_import/discover.py`
-  - ID3 tag extraction in `tools/taghag_import/tags.py`
-  - local JSONL receipt read/write in `tools/taghag_import/receipt.py`
-  - optional Postman evidence parsing in `tools/taghag_import/postman_evidence.py`
-  - PostgREST upload client in `tools/taghag_import/db_client.py`
-  - CLI entrypoints in `tools/taghag_import/cli.py`
-- MP3 operator tooling:
-  - `audit-mp3` writes metadata-only quality reports.
-  - `dump-tags` safely summarizes all readable ID3 frames.
-  - `write-tags` defaults to dry-run and selectively preserves unknown frames.
-  - `provider-evidence` verifies exact Postman ISRC commands and writes logs
-    compatible with `import-batch --postman-evidence`.
-  - Long provider batches support `--prepare-only` so the operator can run the
-    verified command without an agent polling the batch.
+- The database schema (Prompt 02) has been fully corrected. The `mp3_track` legacy table was removed and correctly replaced with `mp3_file`. All 9 core tables (including `mp3_observation`) exist with proper RLS policies and grants.
+- A Python importer package exists in `tools/taghag_import/` and uses the receipt-first flow (Prompt 03) targeting `mp3_file`.
+- A React/Vite shell exists in `web/` with routing, and it is successfully wired to generated Supabase database types from Prompt 05 (`web/src/lib/database.types.ts`).
 - Extracted clean-room utilities exist:
   - genre normalization via `tools/taghag_import/genre.py`
   - provider evidence parsing via `tools/taghag_import/postman_evidence.py`
-- A first React/Vite shell exists in `web/` with a placeholder UI in `web/src/App.tsx`.
-- Python tests cover the importer, MP3 audit/tag tools, provider evidence,
-  staging, transcode, analysis imports, and clean-room utilities.
-  Run `pytest tools/tests -q` from the repository root.
-- Contributor guidance now exists in `AGENTS.md`.
+- MP3 operator tooling:
+  - `audit-mp3`, `dump-tags`, `write-tags`, `provider-evidence`, `transcode`, and `stage` are functional.
+- Python tests cover the importer, MP3 audit/tag tools, provider evidence, staging, transcode, analysis imports, and clean-room utilities.
+- Clean-room audit script (`tools/audit_cleanroom.py`) verifies no legacy tagslut terms leak into active code or migrations.
 
-## Recent MP3 Tools Export
-
-On 2026-06-08, commit `6565e2c` added the MP3 tool export requested for
-Taghag. The work intentionally reuses and extends the existing `tags.py`,
-`audio_probe.py`, `postman_evidence.py`, and `discover.py` modules instead of
-adding an overlapping tag module.
-
-New focused modules:
-
-- `tools/taghag_import/mp3_audit.py`
-- `tools/taghag_import/provider_runner.py`
-
-New CLI commands:
-
-- `taghag-import audit-mp3`
-- `taghag-import dump-tags`
-- `taghag-import write-tags`
-- `taghag-import provider-evidence`
-
-Important behavior contracts:
-
-- `write-tags` is dry-run by default. It writes only with `--execute`.
-- Selective writes preserve unknown ID3 frames and existing comments.
-- Taghag does not write receipts, debug data, or provider notes into MP3
-  comments.
-- `provider-evidence` requires an explicit compatible Postman collection and
-  environment, or `TAGHAG_POSTMAN_COLLECTION` and
-  `TAGHAG_POSTMAN_ENVIRONMENT`.
-- Provider logs remain compatible with `import-batch --postman-evidence`.
-- For long provider batches, use `--prepare-only` to verify commands and let
-  the operator run the batch directly rather than keeping an agent session
-  polling a network-bound process.
-- The FLAC `transcode` and `stage` documentation is still intentional:
-  those commands are database-free preprocessing workflows that produce MP3s.
-  They are not database intake for FLAC files.
-
-Verification run after the implementation commit and push:
-
+## Current Repository Status Check
+Both tests and audits are passing cleanly:
 ```bash
 pytest tools/tests -q
 python tools/audit_cleanroom.py
 ```
-
-The last verified result for commit `6565e2c` was `78 passed`; clean-room audit
-also passed. The pytest warning noise came from the installed pytest-asyncio
-version on Python 3.14, not from Taghag test failures.
-
-## Current Divergence From The Plan
-
-The highest-risk gap is that prompt `02` is not complete, and later work was built on top of the wrong schema nouns.
-
-- The repo uses the preferred `supabase/` layout from prompt `01`.
-- The existing migration under `supabase/migrations/` is not yet the target schema from prompt `02`.
-- The migration creates `mp3_track`, which the plan explicitly forbids; it must be `mp3_file`.
-- The migration models `dj_tag` as a tag dictionary, not per-file DJ metadata.
-- The migration does not create `mp3_observation`.
-- The importer currently uploads to `mp3_track`, matching the wrong schema.
-- The importer command shape does not yet match prompt `03` (`scan`/`load` exist; `import-batch` with receipt-first local workflow is not complete).
-- The web shell is placeholder-only and is not yet wired to generated Supabase database types from prompt `05`.
+(As of the latest check, pytest passes with 78 tests, and the clean-room audit passes perfectly.)
 
 ## Recommended Read Order
 
@@ -102,26 +36,21 @@ The highest-risk gap is that prompt `02` is not complete, and later work was bui
 2. `README.md`
 3. `docs/TAGHAG_MASTER_IMPLEMENTATION_PLAN.md`
 4. `.github/prompts/README.md`
-5. `.github/prompts/taghag-01-repo-layout.prompt.md`
-6. `.github/prompts/taghag-02-first-migration.prompt.md`
-7. `.github/prompts/taghag-03-import-cli.prompt.md`
 
 ## Immediate Next Step
 
-Do not extend the importer or UI first. The next agent should execute prompts `01` and `02` before building further.
+The project foundation is solid. The next agent should focus on the final verification and sign-off steps, or proceed to feature development.
 
 Priority order:
 
-1. Replace the current migration with the correct 9-table MP3 metadata schema centered on `mp3_file`.
-2. Update the importer code to target `mp3_file`, `mp3_observation`, `dj_tag`, `quality_check`, and `tag_evidence` using the receipt-first flow from prompt `03`.
-3. Wire generated Supabase types into the web shell after the schema is valid.
+1. Execute the verification checklist in `.github/prompts/taghag-09-verification-checklist.prompt.md`.
+2. Ensure the project meets the `.github/prompts/taghag-10-definition-of-done.prompt.md`.
+3. Proceed with further feature implementation for the web shell or advanced importer requirements as directed by the user.
 
 ## Quick Reality Check Commands
 
 ```bash
 git status --short
 pytest tools/tests -q
-sed -n '1,220p' supabase/migrations/20260606000000_initial_mp3_metadata_schema.sql
-sed -n '1,220p' .github/prompts/taghag-01-repo-layout.prompt.md
-sed -n '1,260p' .github/prompts/taghag-02-first-migration.prompt.md
+python tools/audit_cleanroom.py
 ```

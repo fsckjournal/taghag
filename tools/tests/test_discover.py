@@ -16,9 +16,8 @@ def test_discover_mp3_case_insensitive_and_out_of_scope_audio(tmp_path: Path) ->
 
     found, skipped = discover_audio_files(tmp_path)
 
-    assert [item.relative_path for item in found] == ["a.mp3", "b.MP3"]
+    assert [item.relative_path for item in found] == ["a.mp3", "b.MP3", "c.flac"]
     assert {item.relative_path for item in skipped} == {
-        "c.flac",
         "d.wav",
         "setlist.m3u",
         "setlist.m3u8",

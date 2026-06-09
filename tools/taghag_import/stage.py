@@ -172,9 +172,15 @@ def _plan_stage_sources(
     return StagePlan(source_root, output_root, items, candidates)
 
 
-def plan_stage(source: str | Path, output: str | Path) -> StagePlan:
+def plan_stage(source: str | Path, output: str | Path, failure_ledger_path: Path | None = None) -> StagePlan:
     source_root = Path(source).expanduser().resolve()
     output_root = Path(output).expanduser().resolve()
+    # Note: we are not pre-filtering discovery here so discovery stats are correct.
+    # The actual failure exclusion is handled in execute_stage via execute_transcode_plan
+    # or we can pass failure_ledger_path down to execute_transcode_plan.
+    # Wait, transcode.py's build_transcode_plan uses failure_ledger_path.
+    # But stage.py does its own discovery via _plan_stage_sources. Let's pass it to _plan_stage_sources.
+
     sources = [
         StageSource(source=path, relative_path=str(_relative(path, source_root)))
         for path in discover_flacs(source_root)
@@ -182,19 +188,42 @@ def plan_stage(source: str | Path, output: str | Path) -> StagePlan:
     return _plan_stage_sources(source_root, output_root, sources)
 
 
-def plan_stage_manifest(manifest: str | Path, output: str | Path) -> StagePlan:
+def plan_stage_manifest(manifest: str | Path, output: str | Path, failure_ledger_path: Path | None = None) -> StagePlan:
     manifest_path = Path(manifest).expanduser().resolve()
     output_root = Path(output).expanduser().resolve()
     return _plan_stage_sources(manifest_path, output_root, load_stage_manifest(manifest_path))
 
 
-def execute_stage(plan: StagePlan, *, dry_run: bool = False, verbose: bool = True) -> dict[str, int]:
+def execute_stage(
+    plan: StagePlan, 
+    *, 
+    dry_run: bool = False, 
+    verbose: bool = True,
+    workers: int | None = None,
+    state_file_path: Path | None = None,
+    failure_ledger_path: Path | None = None,
+) -> dict[str, int]:
     jobs = [
-        TranscodeJob(item.source, item.destination, "existing" if item.status == "existing" else "ready")
+        TranscodeJob(item.source, item.destination, "existing" if item.status == "existing" else "ready", pcm_sha256=item.pcm_sha256)
         for item in plan.items
         if item.status in {"admitted", "existing"}
     ]
-    transcode_result = execute_transcode_plan(jobs, dry_run=dry_run, verbose=verbose)
+    # Re-apply failure ledger skip here since stage bypasses build_transcode_plan
+    if failure_ledger_path and failure_ledger_path.is_file():
+        from .transcode import load_failure_ledger
+        failures = load_failure_ledger(failure_ledger_path)
+        for i, job in enumerate(jobs):
+            if job.source in failures:
+                jobs[i] = TranscodeJob(job.source, job.destination, "failed-skipped")
+                
+    transcode_result = execute_transcode_plan(
+        jobs, 
+        dry_run=dry_run, 
+        verbose=verbose,
+        workers=workers,
+        state_file_path=state_file_path,
+        failure_ledger_path=failure_ledger_path,
+    )
     summary = {
         "discovered": len(plan.items),
         "admitted": sum(item.status in {"admitted", "existing"} for item in plan.items),
@@ -210,7 +239,7 @@ def execute_stage(plan: StagePlan, *, dry_run: bool = False, verbose: bool = Tru
     reports.mkdir(parents=True, exist_ok=True)
     receipts.mkdir(parents=True, exist_ok=True)
 
-    with (reports / "audio_duplicates.csv").open("w", newline="", encoding="utf-8") as handle:
+    with (reports / "audio_appearances.csv").open("w", newline="", encoding="utf-8") as handle:
         writer = csv.DictWriter(handle, fieldnames=["path", "duplicate_of", "pcm_sha256"])
         writer.writeheader()
         for item in plan.items:
@@ -248,7 +277,7 @@ def execute_stage(plan: StagePlan, *, dry_run: bool = False, verbose: bool = Tru
             row["admitted_to_receipt"] = valid_mp3
             if valid_mp3 and item.pcm_sha256:
                 mp3_tags = extract_mp3_tags(item.destination)
-                row["mp3_file"] = compute_file_identity(item.destination, item.relative_path)
+                row["audio_file"] = compute_file_identity(item.destination, item.relative_path)
                 row["mp3_tags"] = mp3_tags
                 row["canonical_genre"] = classify_genre(
                     mp3_tags.get("genre") or mp3_tags.get("subgenre")

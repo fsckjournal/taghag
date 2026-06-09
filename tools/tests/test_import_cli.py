@@ -76,7 +76,7 @@ def test_import_batch_writes_receipt_before_upload_and_skips_db_on_dry_run(
     records = read_receipt(receipts[0])
     event_types = [record["event_type"] for record in records]
     assert "import_run_start" in event_types
-    assert "mp3_observed" in event_types
+    assert "audio_observed" in event_types
     assert "quality_check" in event_types
     assert "import_run_summary" in event_types
     assert "upload_result" not in event_types

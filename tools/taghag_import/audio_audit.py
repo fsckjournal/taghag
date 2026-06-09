@@ -67,7 +67,7 @@ def _timestamp() -> str:
 
 
 def default_audit_output_dir() -> Path:
-    return Path("artifacts") / "mp3_audit" / _timestamp()
+    return Path("artifacts") / "audio_audit" / _timestamp()
 
 
 def metadata_issue_codes(
@@ -114,7 +114,7 @@ def _audit_record(item: DiscoveryRecord) -> dict[str, object]:
         set(list(probe.get("issue_codes", []) or []) + metadata_issue_codes(tags, canonical))
     )
     return {
-        "event_type": "mp3_audit",
+        "event_type": "audio_audit",
         "path": item.path,
         "relative_path": item.relative_path,
         "filename": path.name,
@@ -156,7 +156,7 @@ def _csv_row(record: dict[str, object]) -> dict[str, object]:
     return row
 
 
-def run_mp3_audit(
+def run_audio_audit(
     root: str | Path,
     output_dir: str | Path | None = None,
 ) -> AuditResult:
@@ -181,13 +181,13 @@ def run_mp3_audit(
     issue_counts = _issue_counts(audit_records)
     summary: dict[str, object] = {
         "root": str(root_path),
-        "mp3_files": len(audit_records),
+        "audio_files": len(audit_records),
         "skipped_files": len(skipped_records),
         "issue_counts": issue_counts,
     }
 
-    jsonl_path = resolved_output / "mp3_audit.jsonl"
-    csv_path = resolved_output / "mp3_audit.csv"
+    jsonl_path = resolved_output / "audio_audit.jsonl"
+    csv_path = resolved_output / "audio_audit.csv"
     summary_path = resolved_output / "summary.json"
     _write_jsonl(jsonl_path, records)
     _write_csv(csv_path, [_csv_row(record) for record in audit_records])

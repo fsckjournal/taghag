@@ -3,7 +3,7 @@ begin;
 create table public.track_analysis (
   id uuid primary key default gen_random_uuid(),
   owner_user_id uuid not null references auth.users(id) on delete cascade,
-  mp3_file_id uuid not null,
+  audio_file_id uuid not null,
   schema_name text not null,
   model_profile text,
   models_json jsonb not null default '{}'::jsonb,
@@ -19,9 +19,9 @@ create table public.track_analysis (
   computed_at timestamptz not null,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
-  constraint track_analysis_mp3_file_owner_fk
-    foreign key (mp3_file_id, owner_user_id)
-    references public.mp3_file(id, owner_user_id)
+  constraint track_analysis_audio_file_owner_fk
+    foreign key (audio_file_id, owner_user_id)
+    references public.audio_file(id, owner_user_id)
     on delete cascade,
   constraint track_analysis_attribute_range_check
     check (
@@ -31,11 +31,11 @@ create table public.track_analysis (
       and party between 0 and 1
       and danceability between 0 and 1
     ),
-  unique (owner_user_id, mp3_file_id, schema_name, source_artifact_sha256)
+  unique (owner_user_id, audio_file_id, schema_name, source_artifact_sha256)
 );
 
 create index track_analysis_owner_file_computed_idx
-  on public.track_analysis(owner_user_id, mp3_file_id, computed_at desc);
+  on public.track_analysis(owner_user_id, audio_file_id, computed_at desc);
 
 create trigger set_track_analysis_updated_at
 before update on public.track_analysis

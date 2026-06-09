@@ -6,8 +6,8 @@ from pathlib import Path
 
 APP_TABLES = (
     "import_run",
-    "mp3_file",
-    "mp3_observation",
+    "audio_file",
+    "audio_observation",
     "dj_tag",
     "tag_evidence",
     "quality_check",
@@ -48,8 +48,9 @@ def repository_root() -> Path:
 
 
 def migration_path(root: Path | None = None) -> Path:
-    base = root or repository_root()
-    return base / "supabase" / "migrations" / "20260606000000_initial_mp3_metadata_schema.sql"
+    if root is None:
+        root = Path(__file__).parent.parent.parent
+    return root / "supabase" / "migrations" / "20260606000000_initial_audio_metadata_schema.sql"
 
 
 def read_migration(root: Path | None = None) -> str:

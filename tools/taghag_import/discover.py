@@ -4,7 +4,7 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 
 OUT_OF_SCOPE_AUDIO_EXTENSIONS = frozenset(
-    {".m4a", ".aac", ".flac", ".wav", ".aiff", ".aif", ".alac", ".ogg", ".opus", ".wma"}
+    {".m4a", ".aac", ".wav", ".aiff", ".aif", ".alac", ".ogg", ".opus", ".wma"}
 )
 PLAYLIST_EXTENSIONS = frozenset({".m3u", ".m3u8"})
 JUNK_FILENAMES = frozenset({".DS_Store"})
@@ -42,7 +42,7 @@ def discover_audio_files(root: str | Path) -> tuple[list[DiscoveryRecord], list[
         rel = str(path.relative_to(root_path))
         ext = path.suffix.lower()
 
-        if ext == ".mp3":
+        if ext in (".mp3", ".flac"):
             found.append(
                 DiscoveryRecord(
                     path=str(path),

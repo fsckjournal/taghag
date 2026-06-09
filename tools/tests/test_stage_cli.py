@@ -14,12 +14,12 @@ def test_stage_cli_dry_run_uses_no_database(tmp_path: Path, monkeypatch) -> None
     monkeypatch.setattr(
         cli,
         "plan_stage",
-        lambda source, output: type("Plan", (), {"items": [], "metadata_candidates": []})(),
+        lambda source, output, **kwargs: type("Plan", (), {"items": [], "metadata_candidates": []})(),
     )
     monkeypatch.setattr(
         cli,
         "execute_stage",
-        lambda plan, dry_run, verbose: {
+        lambda plan, dry_run, verbose, **kwargs: {
             "discovered": 0,
             "admitted": 0,
             "duplicates_blocked": 0,
@@ -53,13 +53,13 @@ def test_stage_cli_routes_manifest_input(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setattr(
         cli,
         "plan_stage_manifest",
-        lambda manifest_path, output: calls.append((manifest_path, output))
+        lambda manifest_path, output, **kwargs: calls.append((manifest_path, output))
         or type("Plan", (), {"items": [], "metadata_candidates": []})(),
     )
     monkeypatch.setattr(
         cli,
         "execute_stage",
-        lambda plan, dry_run, verbose: {
+        lambda plan, dry_run, verbose, **kwargs: {
             "discovered": 0,
             "admitted": 0,
             "duplicates_blocked": 0,

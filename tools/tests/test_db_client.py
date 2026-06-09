@@ -28,7 +28,7 @@ def test_upload_receipt_events_uses_canonical_tables(monkeypatch) -> None:
     def fake_urlopen(req):
         payload = json.loads(req.data.decode("utf-8"))
         calls.append((req.full_url, payload, req.headers["Prefer"]))
-        if "/mp3_file" in req.full_url:
+        if "/audio_file" in req.full_url:
             return FakeResponse([{"id": "file-id", "file_key": "sha256:abc"}])
         return FakeResponse([])
 
@@ -46,9 +46,9 @@ def test_upload_receipt_events_uses_canonical_tables(monkeypatch) -> None:
             "import_run": {"id": "run-id", "status": "running"},
         },
         {
-            "event_type": "mp3_observed",
-            "mp3_file": {"file_key": "sha256:abc", "path": "/x.mp3", "filename": "x.mp3"},
-            "mp3_observation": {"import_run_id": "run-id", "observed_path": "/x.mp3", "status": "observed"},
+            "event_type": "audio_observed",
+            "audio_file": {"file_key": "sha256:abc", "path": "/x.mp3", "filename": "x.mp3"},
+            "audio_observation": {"import_run_id": "run-id", "observed_path": "/x.mp3", "status": "observed"},
             "dj_tag": {"artist": "A", "title": "T"},
         },
         {
@@ -72,13 +72,13 @@ def test_upload_receipt_events_uses_canonical_tables(monkeypatch) -> None:
 
     urls = [call[0] for call in calls]
     assert any("/import_run?on_conflict=id" in url for url in urls)
-    assert any("/mp3_file?on_conflict=owner_user_id%2Cfile_key" in url for url in urls)
-    assert any("/mp3_observation" in url for url in urls)
-    assert any("/dj_tag?on_conflict=owner_user_id%2Cmp3_file_id" in url for url in urls)
+    assert any("/audio_file?on_conflict=owner_user_id%2Cfile_key" in url for url in urls)
+    assert any("/audio_observation" in url for url in urls)
+    assert any("/dj_tag?on_conflict=owner_user_id%2Caudio_file_id" in url for url in urls)
     assert any("/quality_check" in url for url in urls)
     assert any("/tag_evidence" in url for url in urls)
     assert any("return=representation" in call[2] for call in calls)
-    assert result["mp3_observation"] == 1
+    assert result["audio_observation"] == 1
 
 
 def test_upload_analysis_events_resolves_file_key_and_upserts_metadata(monkeypatch) -> None:
@@ -121,8 +121,8 @@ def test_upload_analysis_events_resolves_file_key_and_upserts_metadata(monkeypat
         ]
     )
 
-    assert any(method == "GET" and "/mp3_file?" in url for method, url, _ in calls)
+    assert any(method == "GET" and "/audio_file?" in url for method, url, _ in calls)
     analysis_payload = next(payload for method, url, payload in calls if "/track_analysis" in url)
-    assert analysis_payload[0]["mp3_file_id"] == "file-id"
+    assert analysis_payload[0]["audio_file_id"] == "file-id"
     assert analysis_payload[0]["owner_user_id"] == "00000000-0000-0000-0000-000000000001"
     assert result == {"track_analysis": 1, "unmatched": 0}

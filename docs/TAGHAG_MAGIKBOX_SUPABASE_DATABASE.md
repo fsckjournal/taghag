@@ -370,6 +370,28 @@ Those future tables should follow the same pattern:
 - no stored audio bytes,
 - no static set-relative intensity direction column.
 
+## Magikbox Engine Commands
+
+The engine and local sync helpers live under `tools/magikbox/` and use the
+same owner-scoped environment variables as the importer.
+
+Typical operator flow:
+
+```bash
+cd tools
+python magikbox/sonic_discovery.py recompute-all
+python magikbox/crates.py --seed /absolute/path/to/track.mp3 --limit 30 --out-dir ../artifacts/crates
+python magikbox/map.py --out-dir ../artifacts/magikbox_map
+python magikbox/human_correction.py apply --music-dir /Volumes/LOSSY/taghag/mp3s --execute
+python magikbox/human_correction.py audit --out ../artifacts/manual_review_needed.csv
+python magikbox/sync_vibes.py --execute
+```
+
+`sonic_discovery.py` reads `track_analysis` and `dj_tag`, computes the
+normalized `sonic7_v1` vector, and upserts `track_embedding`. `human_correction.py`
+writes pinned corrections into `track_curation`, and `sync_vibes.py` writes the
+resolved vibe list back into local MP3 comments.
+
 ## Operational Notes
 
 - `supabase/seed.sql` is intentionally empty. Do not seed fake production-owned

@@ -203,6 +203,28 @@ row and upsert the five Magikbox attributes, genre candidates, model metadata,
 and source-artifact digest into `track_analysis`. Audio bytes, model inputs,
 and temporary analysis files are never included in database payloads.
 
+## Magikbox engine and sync tools
+
+The Magikbox engine now reads `track_analysis` and `dj_tag` from Postgres,
+normalizes a seven-dimensional vector, and upserts the result into
+`track_embedding`.
+
+Run it from `tools/` with the owner-scoped database env vars:
+
+```bash
+cd tools
+python magikbox/sonic_discovery.py recompute-all
+python magikbox/sonic_discovery.py similar --path /absolute/path/to/track.mp3 --limit 10
+python magikbox/crates.py --seed /absolute/path/to/track.mp3 --limit 30 --out-dir ../artifacts/crates
+python magikbox/map.py --out-dir ../artifacts/magikbox_map
+python magikbox/human_correction.py apply --music-dir /Volumes/LOSSY/taghag/mp3s --execute
+python magikbox/human_correction.py audit --out ../artifacts/manual_review_needed.csv
+python magikbox/sync_vibes.py --execute
+```
+
+`human_correction.py` upserts pinned rows into `track_curation`, and
+`sync_vibes.py` writes the resolved vibes back into local MP3 comments.
+
 ## Local FLAC-to-MP3 transcode
 
 Taghag includes a database-free transcode command. It recursively discovers

@@ -36,6 +36,16 @@ from .tags import (
 from .stage import execute_stage, plan_stage, plan_stage_manifest
 from .transcode import build_transcode_plan, execute_transcode_plan
 
+from .beatport_auth import BeatportAuthManager
+from .beatport_resolver import BeatportResolver
+from .essentia_adapter import EssentiaAdapter
+from .sonic_discovery import compute_sonic_vector, classify_producer_vibes, classify_complexity_tags
+from .generate_neighborhood_crate import CrateGenerator
+from .apply_human_correction import apply_human_corrections
+from .sync_vibes_to_id3 import sync_postgres_vibes_to_id3
+from .advanced_cue_planner import AnlzImporter, SegmentExtractor, ButterFlowPlanner, LIBROSA_AVAILABLE, PYREKORDBOX_AVAILABLE
+
+
 
 DEFAULT_MP3_OUTPUT_ROOT = "/Volumes/LOSSY/taghag"
 
@@ -558,6 +568,63 @@ def _provider_evidence(args: argparse.Namespace) -> int:
     return 1 if result.summary["failed"] else 0
 
 
+def _fetch_metadata(args: argparse.Namespace) -> int:
+    from dataclasses import asdict
+    from .postman_evidence import merge_tag_evidence
+    
+    root_path = Path(args.root).expanduser().resolve()
+    found, _ = discover_audio_files(root_path)
+    
+    isrcs = set()
+    for item in found:
+        tags = _extract_tags(item.path)
+        isrc = tags.get("isrc")
+        if isrc:
+            isrcs.add(str(isrc).strip().upper())
+            
+    if not isrcs:
+        print("No ISRCs found in the provided directory.")
+        return 1
+
+    collection = args.collection or os.environ.get("TAGHAG_POSTMAN_COLLECTION")
+    environment = args.environment or os.environ.get("TAGHAG_POSTMAN_ENVIRONMENT")
+    if not collection or not environment:
+        print("Provide --collection and --environment or set TAGHAG_POSTMAN_COLLECTION and TAGHAG_POSTMAN_ENVIRONMENT")
+        return 1
+
+    output_dir = root_path / ".provider_evidence"
+    config = ProviderRunnerConfig(
+        postman_bin=args.postman_bin,
+        collection_path=Path(collection),
+        environment_path=Path(environment),
+        output_dir=output_dir,
+        timeout_s=args.timeout,
+    )
+    try:
+        verify_provider_config(config)
+        result = run_provider_batch(list(isrcs), config)
+    except Exception as exc:
+        print(f"Provider fetch failed: {exc}")
+        return 1
+
+    isrc_groups: dict[str, list[dict[str, object]]] = {}
+    for evidence in parse_postman_evidence(result.evidence_log):
+        isrc = evidence_lookup_key(evidence).strip().upper()
+        if isrc:
+            isrc_groups.setdefault(isrc, []).append(evidence)
+
+    metadata: dict[str, Any] = {}
+    for isrc, group in isrc_groups.items():
+        resolved = merge_tag_evidence(group)
+        if not resolved.is_empty():
+            metadata[isrc] = asdict(resolved)
+
+    sidecar_path = root_path / "metadata_sidecar.json"
+    sidecar_path.write_text(json.dumps(metadata, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    print(f"Wrote metadata sidecar to {sidecar_path}")
+    return 0
+
+
 def _extract_dj_slice_command(args: argparse.Namespace) -> int:
     try:
         summary = extract_dj_slice(args.sqlite_db)
@@ -756,6 +823,17 @@ def build_parser() -> argparse.ArgumentParser:
     )
     provider_evidence.set_defaults(func=_provider_evidence)
 
+    fetch_metadata = subparsers.add_parser(
+        "fetch-metadata",
+        help="Fetch and save provider metadata to metadata_sidecar.json",
+    )
+    fetch_metadata.add_argument("--root", required=True, help="Path to FLAC directory")
+    fetch_metadata.add_argument("--collection", help="Postman collection file/directory (or TAGHAG_POSTMAN_COLLECTION)")
+    fetch_metadata.add_argument("--environment", help="Postman environment file (or TAGHAG_POSTMAN_ENVIRONMENT)")
+    fetch_metadata.add_argument("--postman-bin", default=os.environ.get("TAGHAG_POSTMAN_BIN", "postman"), help="Postman CLI executable")
+    fetch_metadata.add_argument("--timeout", type=int, default=90, help="Per-ISRC Postman timeout in seconds")
+    fetch_metadata.set_defaults(func=_fetch_metadata)
+
     extract_dj_slice_parser = subparsers.add_parser(
         "extract-dj-slice",
         help="Backfill the legacy DJ slice from music_v3.db into audio_file and dj_tag",
@@ -772,7 +850,350 @@ def build_parser() -> argparse.ArgumentParser:
     )
     extract_dj_slice_parser.set_defaults(func=_extract_dj_slice_command)
 
+    extract_dj_slice_parser.set_defaults(func=_extract_dj_slice_command)
+
+    # --- Taghag Intelligence Extensions ---
+    
+    # 1. Preflight
+    preflight = subparsers.add_parser("preflight", help="Verify dependencies, config, credentials, and schema")
+    preflight.set_defaults(func=_preflight)
+
+    # 2. Auth Sync
+    auth_sync = subparsers.add_parser("auth-sync", help="Synchronize credentials into Postman environment")
+    auth_sync.add_argument("--out", default="postman/environments/taghag.postman_environment.json", help="Path to write Postman env file")
+    auth_sync.set_defaults(func=_auth_sync)
+
+    # 3. Provider Smoke
+    provider_smoke = subparsers.add_parser("provider-smoke", help="Perform smoke tests on Beatport providers")
+    provider_smoke.add_argument("--track-id", default="4862171", help="Sample Beatport track ID to check")
+    provider_smoke.set_defaults(func=_provider_smoke)
+
+    # 4. Essentia Tagger Sub-interface
+    essentia = subparsers.add_parser("essentia", help="Essentia integration commands")
+    essentia_sub = essentia.add_subparsers(dest="subcommand", required=True)
+    
+    ess_analyze = essentia_sub.add_parser("analyze", help="Execute external Essentia analyzer")
+    ess_analyze.add_argument("--input", required=True, help="Input audio file or directory path")
+    ess_analyze.add_argument("--out", required=True, help="Output directory or file path for the sidecar")
+    ess_analyze.add_argument("--dry-run", action="store_true", default=True, help="Run in non-mutating candidate dry-run mode")
+    
+    ess_ingest = essentia_sub.add_parser("ingest", help="Ingest Essentia sidecar to database")
+    ess_ingest.add_argument("--input", required=True, help="Path to sidecar JSON file")
+    
+    essentia.set_defaults(func=_essentia_command)
+
+    # 5. Magikbox Sub-interface
+    magikbox = subparsers.add_parser("magikbox", help="Magikbox classification and crate commands")
+    magikbox_sub = magikbox.add_subparsers(dest="subcommand", required=True)
+    
+    mag_recompute = magikbox_sub.add_parser("recompute", help="Recompute L2 normalized 7D vectors from raw analysis")
+    mag_recompute.set_defaults(func=_magikbox_recompute)
+    
+    mag_similar = magikbox_sub.add_parser("similar", help="Find similar tracks in database")
+    mag_similar.add_argument("--track-id", required=True, help="Database audio_file ID")
+    mag_similar.add_argument("--limit", type=int, default=10, help="Max candidates")
+    
+    mag_crate = magikbox_sub.add_parser("crate", help="Generate neighborhood playlist/crate")
+    mag_crate.add_argument("--seed-id", required=True, help="Database audio_file ID of seed track")
+    mag_crate.add_argument("--out-dir", default="artifacts/crates", help="Output directory for playlist")
+    mag_crate.add_argument("--limit", type=int, default=30, help="Max tracks in crate")
+    
+    mag_correct = magikbox_sub.add_parser("correct", help="Apply human qualitative corrections from ID3 tags")
+    mag_correct.add_argument("--music-dir", required=True, help="Base music library directory")
+    mag_correct.add_argument("--execute", action="store_true", help="Apply changes directly to Supabase")
+    
+    mag_sync_id3 = magikbox_sub.add_parser("sync-id3", help="Sync Supabase vibes back to ID3 tags")
+    mag_sync_id3.add_argument("--music-dir", required=True, help="Base music library directory")
+    mag_sync_id3.add_argument("--execute", action="store_true", help="Apply tag modifications to MP3 files")
+    
+    magikbox.set_defaults(func=_magikbox_command)
+
+    # 6. Cue Sub-interface
+    cue = subparsers.add_parser("cue", help="Advanced Cue Intelligence commands")
+    cue_sub = cue.add_subparsers(dest="subcommand", required=True)
+    
+    cue_import = cue_sub.add_parser("import", help="Import Rekordbox ANLZ binary cues")
+    cue_import.add_argument("--anlz-dir", required=True, help="Directory containing ANLZ files")
+    cue_import.add_argument("--track-id", required=True, help="Database audio_file ID for the track")
+    
+    cue_extract = cue_sub.add_parser("extract", help="Extract audio segments and compute embeddings")
+    cue_extract.add_argument("--track-id", required=True, help="Database audio_file ID")
+    cue_extract.add_argument("--audio-path", required=True, help="Path to local audio file")
+    
+    cue_plan = cue_sub.add_parser("plan", help="Execute pathfinder sequencing")
+    cue_plan.add_argument("--seed", required=True, help="Database track_segment ID to start from")
+    cue_plan.add_argument("--depth", type=int, default=4, help="Set sequence depth")
+    
+    cue.set_defaults(func=_cue_command)
+
     return parser
+
+
+def _preflight(args: argparse.Namespace) -> int:
+    print("=== Taghag Preflight Checklist ===")
+    
+    # Check dependencies
+    deps = {
+        "mutagen": True,
+        "pyrekordbox": PYREKORDBOX_AVAILABLE,
+        "librosa": LIBROSA_AVAILABLE,
+        "numpy": LIBROSA_AVAILABLE,
+        "psycopg2": True
+    }
+    
+    print("\n[Dependencies]")
+    for dep, ok in deps.items():
+        print(f"  {dep:12}: {'[OK]' if ok else '[FAILED (Missing)]'}")
+
+    # Check configuration
+    print("\n[Configuration]")
+    config_ok = True
+    try:
+        cfg = read_database_config()
+        print(f"  Supabase URL : {cfg.supabase_url}")
+        print(f"  Owner User ID: {cfg.owner_user_id}")
+        print(f"  Database DSN : {'[PRESENT]' if cfg.database_url else '[MISSING]'}")
+    except Exception as exc:
+        print(f"  Config Error : {exc}")
+        config_ok = False
+        
+    # Check Beatport credentials
+    auth_m = BeatportAuthManager()
+    dj_tok = auth_m.get_dj_token()
+    v4_creds = auth_m.get_v4_credentials()
+    print(f"  BP DJ Token  : {'[SYNCED]' if dj_tok else '[MISSING]'}")
+    print(f"  BP v4 Credentials: {'[SYNCED]' if v4_creds else '[MISSING]'}")
+
+    # Check Database Connection and Schema
+    if config_ok:
+        print("\n[Database Schema Verification]")
+        try:
+            client = TaghagDbClient(cfg)
+            # Query tables
+            tables = ["audio_file", "dj_tag", "track_analysis", "track_embedding", "track_curation", "track_cue", "track_segment", "transition_edge"]
+            for table in tables:
+                rows = client._get_postgrest_rows(table, {"limit": "1"})
+                print(f"  Table '{table:15}': [EXISTS]")
+            
+            # Query view
+            rows = client._get_postgrest_rows("sonic_analysis", {"limit": "1"})
+            print("  View 'sonic_analysis' : [EXISTS]")
+        except Exception as exc:
+            print(f"  DB Check Error: {exc}")
+
+    print("\nPreflight complete.")
+    return 0
+
+
+def _auth_sync(args: argparse.Namespace) -> int:
+    auth_m = BeatportAuthManager()
+    dj_token = auth_m.get_dj_token()
+    v4_token = auth_m.fetch_v4_token()
+
+    if not dj_token and not v4_token:
+        print("Error: No active Beatport tokens or client credentials found to sync.")
+        return 1
+
+    env_path = Path(args.out)
+    env_path.parent.mkdir(parents=True, exist_ok=True)
+
+    env_values = [
+        {"key": "BEATPORT_DJ_TOKEN", "value": dj_token or "", "enabled": True, "type": "secret"},
+        {"key": "BEATPORT_V4_TOKEN", "value": v4_token or "", "enabled": True, "type": "secret"}
+    ]
+
+    env_payload = {
+        "name": "taghag",
+        "values": env_values
+    }
+
+    env_path.write_text(json.dumps(env_payload, indent=2), encoding="utf-8")
+    print(f"Postman environment synchronized and written to: {env_path}")
+    return 0
+
+
+def _provider_smoke(args: argparse.Namespace) -> int:
+    print(f"Running provider smoke tests for song ID: {args.track_id}")
+    resolver = BeatportResolver()
+    
+    # 1. Fetch metadata.php
+    print("Testing dj.beatport.com api/metadata.php...")
+    metadata = resolver.fetch_iwebdj_metadata(args.track_id)
+    if metadata:
+        print("  [SUCCESS] Metadata fetched and decoded successfully:")
+        print(f"    BPM: {metadata['bpm']:.2f}")
+        print(f"    Beat Offset: {metadata['beat_offset_ms']:.2f} ms")
+        print(f"    Intro: {metadata['intro_ms']:.2f} ms")
+        print(f"    Outro: {metadata['outro_ms']:.2f} ms")
+        print(f"    Total Beats: {len(metadata['beat_times_ms'])}")
+    else:
+        print("  [FAILED] Could not retrieve metadata or decode payload.")
+        return 1
+
+    return 0
+
+
+def _essentia_command(args: argparse.Namespace) -> int:
+    adapter = EssentiaAdapter()
+    if args.subcommand == "analyze":
+        code, log = adapter.run_analysis(args.input, args.out, dry_run=args.dry_run)
+        print(f"Analysis exited with code: {code}")
+        print(f"Run Log:\n{log}")
+        return code
+    elif args.subcommand == "ingest":
+        client = TaghagDbClient(read_database_config())
+        res = adapter.ingest_sidecar(client, args.input)
+        print(f"Ingested sidecar: {res}")
+        return 0
+    return 1
+
+
+def _magikbox_recompute(args: argparse.Namespace) -> int:
+    client = TaghagDbClient(read_database_config())
+    owner_id = client._config.owner_user_id
+    
+    # Fetch all tracks from track_analysis
+    analyses = client._get_postgrest_rows(
+        "track_analysis",
+        {"owner_user_id": f"eq.{owner_id}"}
+    )
+    
+    # Fetch all dj_tags for BPM
+    dj_tags = {
+        t["audio_file_id"]: t 
+        for t in client._get_postgrest_rows(
+            "dj_tag",
+            {"owner_user_id": f"eq.{owner_id}"}
+        )
+    }
+
+    embeddings = []
+    
+    for row in analyses:
+        file_id = row["audio_file_id"]
+        tag = dj_tags.get(file_id, {})
+        bpm = float(tag.get("bpm") or 120.0)
+        energy = float(tag.get("energy") or 5)
+        
+        # Calculate log-normalized 7D vector
+        vec = compute_sonic_vector(
+            happy=float(row["happy"]),
+            aggressive=float(row["aggressive"]),
+            relaxed=float(row["relaxed"]),
+            party=float(row["party"]),
+            danceability=float(row["danceability"]),
+            bpm=bpm,
+            energy=energy
+        )
+        
+        # Classify producer vibes & complexity tags
+        vibes = classify_producer_vibes(
+            happy=float(row["happy"]),
+            aggressive=float(row["aggressive"]),
+            relaxed=float(row["relaxed"]),
+            party=float(row["party"]),
+            danceability=float(row["danceability"])
+        )
+        
+        embeddings.append({
+            "owner_user_id": owner_id,
+            "audio_file_id": file_id,
+            "vector_schema": "essentia-7d-v1",
+            "embedding": vec,
+            "producer_vibes_json": vibes,
+            "computed_at": datetime.now(UTC).isoformat()
+        })
+        
+    if embeddings:
+        client.upsert_track_embedding(embeddings)
+        print(f"Recomputed and upserted {len(embeddings)} track embeddings to Postgres.")
+        return 0
+        
+    print("No track analysis records found to recompute.")
+    return 0
+
+
+def _magikbox_command(args: argparse.Namespace) -> int:
+    client = TaghagDbClient(read_database_config())
+    if args.subcommand == "similar":
+        generator = CrateGenerator(client)
+        try:
+            results = generator.find_neighborhood(args.track_id, limit=args.limit)
+            for i, item in enumerate(results, 1):
+                print(f"{i}. [Dist: {item['dist']:.4f}] {item['filename']} (BPM: {item['bpm']}, Key: {item['key']})")
+            return 0
+        except Exception as exc:
+            print(f"Error: {exc}")
+            return 1
+            
+    elif args.subcommand == "crate":
+        generator = CrateGenerator(client)
+        try:
+            results = generator.find_neighborhood(args.seed_id, limit=args.limit)
+            
+            # Fetch path of seed
+            seed_files = client._get_postgrest_rows(
+                "audio_file",
+                {"id": f"eq.{args.seed_id}", "owner_user_id": f"eq.{client._config.owner_user_id}"}
+            )
+            if not seed_files:
+                raise ValueError("Seed track not found in audio_file table.")
+            seed_path = seed_files[0]["path"]
+            
+            playlist_path = generator.write_crate_playlist(seed_path, results, args.out_dir)
+            print(f"Generated playlist crate: {playlist_path}")
+            return 0
+        except Exception as exc:
+            print(f"Error: {exc}")
+            return 1
+            
+    elif args.subcommand == "correct":
+        apply_human_corrections(client, args.music_dir, execute=args.execute)
+        return 0
+        
+    elif args.subcommand == "sync-id3":
+        sync_postgres_vibes_to_id3(client, args.music_dir, execute=args.execute)
+        return 0
+        
+    return 1
+
+
+def _cue_command(args: argparse.Namespace) -> int:
+    client = TaghagDbClient(read_database_config())
+    if args.subcommand == "import":
+        importer = AnlzImporter(client)
+        try:
+            importer.import_anlz(Path(args.anlz_dir), args.track_id)
+            return 0
+        except Exception as exc:
+            print(f"Error: {exc}")
+            return 1
+            
+    elif args.subcommand == "extract":
+        extractor = SegmentExtractor(client)
+        try:
+            extractor.extract_and_update(args.track_id, Path(args.audio_path))
+            return 0
+        except Exception as exc:
+            print(f"Error: {exc}")
+            return 1
+            
+    elif args.subcommand == "plan":
+        planner = ButterFlowPlanner(client)
+        try:
+            states = planner.plan_sequence(args.seed, depth=args.depth)
+            if not states:
+                print("No valid DJ transition path found.")
+                return 0
+            for idx, state in enumerate(states, 1):
+                print(f"Path {idx}: total_cost={state.cost:.4f}")
+                print("  " + " -> ".join(state.path))
+            return 0
+        except Exception as exc:
+            print(f"Error: {exc}")
+            return 1
+            
+    return 1
 
 
 def main() -> int:
@@ -783,3 +1204,4 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+

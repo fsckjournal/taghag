@@ -111,6 +111,30 @@ class TaghagDbClient:
             on_conflict="owner_user_id,audio_file_id,schema_name,source_artifact_sha256",
         )
 
+    def upsert_track_embedding(self, embedding_rows: list[dict[str, object]]) -> None:
+        self._postgrest_request(
+            "track_embedding",
+            embedding_rows,
+            on_conflict="owner_user_id,audio_file_id,vector_schema",
+        )
+
+    def upsert_track_curation(self, curation_rows: list[dict[str, object]]) -> None:
+        self._postgrest_request(
+            "track_curation",
+            curation_rows,
+            on_conflict="owner_user_id,audio_file_id",
+        )
+
+    def insert_track_cues(self, cues: list[dict[str, object]]) -> None:
+        self._postgrest_request("track_cue", cues)
+
+    def insert_track_segments(self, segments: list[dict[str, object]]) -> None:
+        self._postgrest_request("track_segment", segments)
+
+    def insert_transition_edges(self, edges: list[dict[str, object]]) -> None:
+        self._postgrest_request("transition_edge", edges)
+
+
     def _audio_file_ids_for_file_keys(self, file_keys: set[str]) -> dict[str, str]:
         if not file_keys:
             return {}

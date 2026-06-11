@@ -18,6 +18,7 @@ class TranscodeJob:
     destination: Path
     status: str
     pcm_sha256: str | None = None
+    metadata_tags: dict[str, object] | None = None
 
 
 def load_failure_ledger(ledger_path: Path) -> set[Path]:
@@ -121,13 +122,17 @@ def _execute_single_job(job: TranscodeJob) -> tuple[TranscodeJob, bool, str]:
         job.destination.unlink(missing_ok=True)
         return job, False, completed.stderr.strip()
         
-    if job.pcm_sha256:
+    if job.pcm_sha256 or job.metadata_tags:
         try:
             from .tags import apply_mp3_tag_updates
-            apply_mp3_tag_updates(job.destination, {"pcm_hash": job.pcm_sha256}, execute=True)
+            updates = dict(job.metadata_tags or {})
+            if job.pcm_sha256:
+                updates["pcm_hash"] = job.pcm_sha256
+            if updates:
+                apply_mp3_tag_updates(job.destination, updates, execute=True)
         except Exception as e:
             job.destination.unlink(missing_ok=True)
-            return job, False, f"Failed to inject PCM hash: {e}"
+            return job, False, f"Failed to inject tags: {e}"
             
     return job, True, ""
 

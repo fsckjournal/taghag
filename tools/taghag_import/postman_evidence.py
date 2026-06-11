@@ -38,6 +38,9 @@ class ResolvedTags:
     catalog_number: str = ""
     release_date: str = ""
     year: str = ""
+    spotify_id: str = ""
+    beatport_album_id: str = ""
+    beatport_track_id: str = ""
     field_sources: dict[str, str] = field(default_factory=dict)
     providers_matched: list[str] = field(default_factory=list)
     raw_status: dict[str, str] = field(default_factory=dict)
@@ -97,6 +100,9 @@ def merge_tag_evidence(evidences: list[dict[str, object]]) -> ResolvedTags:
     matched: list[str] = []
     statuses: dict[str, str] = {}
     isrc = ""
+    spotify_id = ""
+    beatport_album_id = ""
+    beatport_track_id = ""
 
     for evidence in evidences:
         provider = str(evidence.get("provider") or "").lower()
@@ -104,6 +110,13 @@ def merge_tag_evidence(evidences: list[dict[str, object]]) -> ResolvedTags:
         statuses[provider] = status
         if not isrc:
             isrc = str(evidence.get("lookup_isrc") or "")
+            
+        if provider == "spotify" and (evidence.get("provider_track_id") or evidence.get("id")):
+            spotify_id = str(evidence.get("provider_track_id") or evidence.get("id"))
+        if provider == "beatport":
+            if evidence.get("provider_track_id") or evidence.get("id"):
+                beatport_track_id = str(evidence.get("provider_track_id") or evidence.get("id"))
+
         if status != "matched":
             continue
 
@@ -127,6 +140,13 @@ def merge_tag_evidence(evidences: list[dict[str, object]]) -> ResolvedTags:
                 current = winners.get(our_key)
                 if current is None or score > current[0]:
                     winners[our_key] = (score, value, provider)
+                    
+            if provider == "beatport":
+                album = candidate.get("album") or candidate.get("release") or {}
+                if isinstance(album, dict) and album.get("id"):
+                    beatport_album_id = str(album["id"])
+                elif candidate.get("album_id") or candidate.get("release_id"):
+                    beatport_album_id = str(candidate.get("album_id") or candidate.get("release_id"))
 
             for field_candidate in candidate.get("field_candidates", []) or []:
                 if not isinstance(field_candidate, dict):
@@ -149,6 +169,9 @@ def merge_tag_evidence(evidences: list[dict[str, object]]) -> ResolvedTags:
 
     resolved = ResolvedTags(
         isrc=isrc,
+        spotify_id=spotify_id,
+        beatport_album_id=beatport_album_id,
+        beatport_track_id=beatport_track_id,
         providers_matched=matched,
         raw_status=statuses,
     )

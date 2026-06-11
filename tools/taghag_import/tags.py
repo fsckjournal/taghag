@@ -31,6 +31,9 @@ ID3_TO_FIELD = {
     "TXXX:RATING": "rating",
     "TXXX:ENERGY": "energy",
     "TXXX:PCM_HASH": "pcm_hash",
+    "TXXX:SPOTIFY_ID": "spotify_id",
+    "TXXX:BEATPORT_ALBUM_ID": "beatport_album_id",
+    "TXXX:BEATPORT_TRACK_ID": "beatport_track_id",
 }
 
 FIELD_ALIASES = {
@@ -60,6 +63,9 @@ WRITABLE_FIELDS = frozenset(
         "title",
         "track_number",
         "year",
+        "spotify_id",
+        "beatport_album_id",
+        "beatport_track_id",
     }
 )
 
@@ -149,6 +155,9 @@ def extract_mp3_tags(path: str | Path) -> dict[str, Any]:
         "track_number": None,
         "composer": None,
         "comment": None,
+        "spotify_id": None,
+        "beatport_album_id": None,
+        "beatport_track_id": None,
         "raw_id3": {},
     }
 
@@ -244,7 +253,7 @@ def _field_has_value(tags: Any, field: str) -> bool:
         return bool(_txxx_value(tags, "SUBGENRE"))
     if field == "musical_key":
         return bool(_frame_value(tags, "TKEY") or _txxx_value(tags, "INITIALKEY"))
-    if field in {"compilation", "rating", "energy", "pcm_hash"}:
+    if field in {"compilation", "rating", "energy", "pcm_hash", "spotify_id", "beatport_album_id", "beatport_track_id"}:
         return bool(_txxx_value(tags, field.upper()))
 
     frame_by_field = {
@@ -323,7 +332,7 @@ def _set_field(tags: Any, field: str, value: str) -> None:
         tags.setall("TKEY", [TKEY(encoding=3, text=[value])])
         _replace_txxx(tags, "INITIALKEY", value)
         return
-    if field in {"compilation", "rating", "energy", "pcm_hash"}:
+    if field in {"compilation", "rating", "energy", "pcm_hash", "spotify_id", "beatport_album_id", "beatport_track_id"}:
         _replace_txxx(tags, field.upper(), value)
         return
     raise ValueError(f"unsupported MP3 tag field: {field}")

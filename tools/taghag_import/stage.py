@@ -133,12 +133,49 @@ def _plan_stage_sources(
     keepers: dict[str, Path] = dict(existing_pcm)
     items: list[StageItem] = []
 
+    metadata_sidecar = source_root / "metadata_sidecar.json"
+    sidecar_data = {}
+    if metadata_sidecar.is_file():
+        try:
+            sidecar_data = json.loads(metadata_sidecar.read_text(encoding="utf-8"))
+        except json.JSONDecodeError:
+            pass
+
     for stage_source in sources:
         path = stage_source.source
         rel = Path(stage_source.relative_path)
-        destination = (output_root / "mp3" / rel).with_suffix(".mp3")
         probe = probe_flac(path)
-        tags = extract_flac_tags(path)
+        tags = dict(extract_flac_tags(path))
+
+        isrc = _normalized(tags.get("isrc") or "").upper()
+        fetched = sidecar_data.get(isrc, {})
+        if fetched:
+            for key in ["title", "artist", "album", "label", "genre", "catalog_number", "release_date", "year", "bpm", "spotify_id", "beatport_album_id", "beatport_track_id", "musical_key"]:
+                if fetched.get(key):
+                    tags[key] = fetched[key]
+            
+            if fetched.get("genre"):
+                canonical = classify_genre(fetched.get("genre"))
+                if canonical.get("canonical_genre"):
+                    tags["genre"] = canonical.get("canonical_genre")
+                if canonical.get("canonical_subgenre"):
+                    tags["subgenre"] = canonical.get("canonical_subgenre")
+
+        beatport_album_id = tags.get("beatport_album_id")
+        
+        album_dir = str(tags.get("album") or "Unknown Album").replace("/", "_")
+        if beatport_album_id:
+            album_dir = f"[{beatport_album_id}] {album_dir}"
+            
+        artist_dir = str(tags.get("artist") or "Unknown Artist").replace("/", "_")
+        track_number = str(tags.get("track_number") or "").zfill(2)
+        title = str(tags.get("title") or path.stem).replace("/", "_")
+        
+        if beatport_album_id and track_number and tags.get("title") and tags.get("artist") and tags.get("album"):
+            rel = Path(artist_dir) / album_dir / f"{track_number} - {title}.flac"
+
+        destination = (output_root / "mp3" / rel).with_suffix(".mp3")
+
         if not probe.get("valid"):
             items.append(StageItem(path, str(rel), destination, "invalid", None, None, None, tags, probe))
             continue
@@ -204,7 +241,7 @@ def execute_stage(
     failure_ledger_path: Path | None = None,
 ) -> dict[str, int]:
     jobs = [
-        TranscodeJob(item.source, item.destination, "existing" if item.status == "existing" else "ready", pcm_sha256=item.pcm_sha256)
+        TranscodeJob(item.source, item.destination, "existing" if item.status == "existing" else "ready", pcm_sha256=item.pcm_sha256, metadata_tags=item.tags)
         for item in plan.items
         if item.status in {"admitted", "existing"}
     ]

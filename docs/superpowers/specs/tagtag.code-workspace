@@ -1,0 +1,14 @@
+{
+	"folders": [
+		{
+			"path": "../../.."
+		},
+		{
+			"path": "../../../../tagslut"
+		},
+		{
+			"path": "../../../../Essentia-to-Metadata"
+		}
+	],
+	"settings": {}
+}

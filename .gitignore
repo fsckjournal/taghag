@@ -22,3 +22,15 @@ supabase/.temp/
 *.m3u8
 *.log
 tools/out.txt
+
+# Postman local directories and runtime data
+.postman/
+postman/
+
+# Delivery overlays and installers
+.taghag-delivery/
+taghag-overlay-installation-report.txt
+*.zip
+
+# Local caches
+tools/tags_cache.json

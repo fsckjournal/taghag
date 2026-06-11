@@ -26,6 +26,12 @@ class BeatportAuthManager:
                 data = json.loads(self.tokens_path.read_text(encoding="utf-8"))
                 # Support different formats of tokens.json
                 if isinstance(data, dict):
+                    # Check for nested beatport key
+                    bp_data = data.get("beatport")
+                    if isinstance(bp_data, dict):
+                        token = bp_data.get("access_token") or bp_data.get("dj_token") or bp_data.get("token")
+                        if token:
+                            return token
                     return data.get("access_token") or data.get("dj_token") or data.get("token")
             except Exception:
                 pass

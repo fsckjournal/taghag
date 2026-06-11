@@ -31,3 +31,6 @@ postman/
 .taghag-delivery/
 taghag-overlay-installation-report.txt
 *.zip
+
+# Local caches
+tools/tags_cache.json

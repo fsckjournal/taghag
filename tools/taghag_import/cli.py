@@ -44,6 +44,7 @@ from .generate_neighborhood_crate import CrateGenerator
 from .apply_human_correction import apply_human_corrections
 from .sync_vibes_to_id3 import sync_postgres_vibes_to_id3
 from .advanced_cue_planner import AnlzImporter, SegmentExtractor, ButterFlowPlanner, LIBROSA_AVAILABLE, PYREKORDBOX_AVAILABLE
+from .mixonset import MixonsetImporter
 
 
 
@@ -915,6 +916,11 @@ def build_parser() -> argparse.ArgumentParser:
     cue_import = cue_sub.add_parser("import", help="Import Rekordbox ANLZ binary cues")
     cue_import.add_argument("--anlz-dir", required=True, help="Directory containing ANLZ files")
     cue_import.add_argument("--track-id", required=True, help="Database audio_file ID for the track")
+
+    cue_mixonset = cue_sub.add_parser("import-mixonset", help="Import Mixonset/Offtrack decrypted cues and segments")
+    cue_mixonset.add_argument("--appstatus", default="/Users/g/Library/Containers/8AE1006C-43C9-49F1-ABE5-1E83BBE749C7/Data/Documents/appstatus.txt", help="Path to appstatus.txt")
+    cue_mixonset.add_argument("--docs-dir", default="/Users/g/Library/Containers/8AE1006C-43C9-49F1-ABE5-1E83BBE749C7/Data/Documents", help="Path to Documents sandbox directory")
+    cue_mixonset.add_argument("--dry-run", action="store_true", help="Print summary without inserting into database")
     
     cue_extract = cue_sub.add_parser("extract", help="Extract audio segments and compute embeddings")
     cue_extract.add_argument("--track-id", required=True, help="Database audio_file ID")
@@ -1164,6 +1170,28 @@ def _cue_command(args: argparse.Namespace) -> int:
         importer = AnlzImporter(client)
         try:
             importer.import_anlz(Path(args.anlz_dir), args.track_id)
+            return 0
+        except Exception as exc:
+            print(f"Error: {exc}")
+            return 1
+            
+    elif args.subcommand == "import-mixonset":
+        config = read_database_config()
+        importer = MixonsetImporter(client, config)
+        try:
+            stats = importer.import_mixonset_analysis(
+                Path(args.appstatus),
+                Path(args.docs_dir),
+                dry_run=args.dry_run
+            )
+            print("Mixonset Import completed successfully:")
+            print(f"  Matched tracks: {stats['matched_tracks']}")
+            print(f"  Unmatched tracks: {stats['unmatched_tracks']}")
+            print(f"  Decrypted files: {stats['decrypted_files']}")
+            print(f"  Header-only processed: {stats['header_only_processed']}")
+            print(f"  DJ tags upserted: {stats['dj_tags_upserted']}")
+            print(f"  Cues inserted: {stats['cues_inserted']}")
+            print(f"  Segments inserted: {stats['segments_inserted']}")
             return 0
         except Exception as exc:
             print(f"Error: {exc}")

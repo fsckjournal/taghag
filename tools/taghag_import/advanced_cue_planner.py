@@ -192,28 +192,19 @@ class SegmentExtractor:
             print("  -> Librosa or Numpy not available; segment extraction skipped.")
             return 0
 
-        if not self.config.database_url:
-            raise ValueError("Direct database connection URL is required for segment audio extraction.")
-
         print(f"Extracting segment features for: {audio_path.name}")
         
-        conn = psycopg2.connect(self.config.database_url)
-        cur = conn.cursor(cursor_factory=RealDictCursor)
-
-        # 1. Fetch segments
-        cur.execute(
-            """
-            SELECT id, ms_start, ms_end, role
-            FROM public.track_segment
-            WHERE audio_file_id = %s
-            ORDER BY ms_start ASC
-            """,
-            (track_id,)
+        # 1. Fetch segments via REST
+        segments = self.db_client._get_postgrest_rows(
+            "track_segment",
+            {
+                "select": "id,ms_start,ms_end,role",
+                "audio_file_id": f"eq.{track_id}",
+                "order": "ms_start.asc",
+            }
         )
-        segments = cur.fetchall()
         if not segments:
             print("  -> No segments registered for this track.")
-            conn.close()
             return 0
 
         # Load audio file
@@ -221,8 +212,8 @@ class SegmentExtractor:
         updated = 0
 
         for seg in segments:
-            start_s = seg["ms_start"] / 1000.0
-            end_s = seg["ms_end"] / 1000.0
+            start_s = int(seg["ms_start"]) / 1000.0
+            end_s = int(seg["ms_end"]) / 1000.0
             
             start_sample = max(0, int(start_s * sr))
             end_sample = min(len(audio), int(end_s * sr))
@@ -233,19 +224,13 @@ class SegmentExtractor:
             clip = audio[start_sample:end_sample]
             embedding = self.compute_segment_embedding(clip, sr)
             
-            cur.execute(
-                """
-                UPDATE public.track_segment
-                SET control_vec = %s,
-                    source_system = 'model'
-                WHERE id = %s
-                """,
-                (json.dumps(embedding), seg["id"])
+            self.db_client._patch_postgrest_rows(
+                "track_segment",
+                {"id": f"eq.{seg['id']}"},
+                {"control_vec": embedding, "source_system": "model"}
             )
             updated += 1
             
-        conn.commit()
-        conn.close()
         print(f"  -> Extracted and saved {updated} segment embeddings.")
         return updated
 
@@ -275,11 +260,6 @@ class ButterFlowPlanner:
         self.db_client = db_client
         self.config = db_client._config
 
-    def _get_connection(self) -> psycopg2.extensions.connection:
-        if not self.config.database_url:
-            raise ValueError("Direct database connection URL is required for transition pathfinding.")
-        return psycopg2.connect(self.config.database_url, cursor_factory=RealDictCursor)
-
     def edge_cost(self, edge: CandidateEdge, w1: float, w2: float, w3: float, w4: float) -> float:
         return (
             w1 * edge.vibe_dist
@@ -298,106 +278,164 @@ class ButterFlowPlanner:
         w3: float = 0.75, # Camelot transition weight
         w4: float = 0.5   # Cue confidence weight
     ) -> list[BeamState]:
-        conn = self._get_connection()
-        cur = conn.cursor()
-        
-        # Fetch seed details (specifically key & BPM from dj_tag and segment vector)
-        cur.execute(
-            """
-            SELECT s.id, s.audio_file_id, d.bpm, d.musical_key as camelot_key, s.control_vec
-            FROM public.track_segment s
-            JOIN public.dj_tag d ON d.audio_file_id = s.audio_file_id AND d.owner_user_id = s.owner_user_id
-            WHERE s.id = %s
-            """,
-            (seed_segment_id,)
+        # Fetch seed details from segment ID via REST
+        seed_rows = self.db_client._get_postgrest_rows(
+            "track_segment",
+            {"select": "id,audio_file_id,control_vec", "id": f"eq.{seed_segment_id}"}
         )
-        seed = cur.fetchone()
-        if not seed:
-            conn.close()
+        if not seed_rows:
             raise ValueError(f"Seed segment {seed_segment_id} not found in database.")
+        seed_seg = seed_rows[0]
+        seed_id = seed_seg["id"]
+        seed_audio_id = seed_seg["audio_file_id"]
+        seed_vec_raw = seed_seg["control_vec"]
+        
+        if isinstance(seed_vec_raw, str):
+            seed_vec = json.loads(seed_vec_raw)
+        else:
+            seed_vec = seed_vec_raw
 
-        seed_id, seed_audio_id, seed_bpm, seed_key, seed_vec = (
-            seed["id"], seed["audio_file_id"], float(seed["bpm"]), seed["camelot_key"], seed["control_vec"]
+        seed_tags = self.db_client._get_postgrest_rows(
+            "dj_tag",
+            {"select": "bpm,musical_key", "audio_file_id": f"eq.{seed_audio_id}"}
         )
+        if not seed_tags:
+            raise ValueError(f"dj_tag not found for seed track {seed_audio_id}")
+        seed_bpm = float(seed_tags[0]["bpm"])
+        seed_key = seed_tags[0]["musical_key"]
+
+        print("Caching dj_tags and track_segments from database...")
+        # Cache all dj_tags
+        dj_tags_cache = {}
+        offset = 0
+        limit = 1000
+        while True:
+            rows = self.db_client._get_postgrest_rows(
+                "dj_tag",
+                {"select": "audio_file_id,bpm,musical_key", "limit": str(limit), "offset": str(offset)}
+            )
+            if not rows:
+                break
+            for r in rows:
+                if r.get("audio_file_id") and r.get("bpm"):
+                    dj_tags_cache[r["audio_file_id"]] = {
+                        "bpm": float(r["bpm"]),
+                        "musical_key": r.get("musical_key")
+                    }
+            offset += limit
+
+        # Cache all segments with role intro/rise/peak
+        segments_cache = []
+        offset = 0
+        limit = 1000
+        while True:
+            rows = self.db_client._get_postgrest_rows(
+                "track_segment",
+                {
+                    "select": "id,audio_file_id,role,control_vec,confidence",
+                    "role": "in.(intro,rise,peak)",
+                    "limit": str(limit),
+                    "offset": str(offset)
+                }
+            )
+            if not rows:
+                break
+            for r in rows:
+                if r.get("control_vec"):
+                    vec_raw = r["control_vec"]
+                    if isinstance(vec_raw, str):
+                        vec = json.loads(vec_raw)
+                    else:
+                        vec = vec_raw
+                    r["control_vec_parsed"] = vec
+                    segments_cache.append(r)
+            offset += limit
+
+        print(f"Cached {len(dj_tags_cache)} dj_tags and {len(segments_cache)} segments.")
 
         beam = [BeamState(path=[seed_segment_id], cost=0.0, last_segment_id=seed_segment_id, last_audio_file_id=seed_audio_id)]
+
+        def cosine_distance(v1: list[float], v2: list[float]) -> float:
+            if not v1 or not v2 or len(v1) != len(v2):
+                return 1.0
+            dot = sum(x * y for x, y in zip(v1, v2))
+            dot = max(-1.0, min(1.0, dot))
+            return 1.0 - dot
 
         for d_idx in range(depth):
             expanded = []
             for state in beam:
-                # Find current last track key and BPM
-                cur.execute(
-                    """
-                    SELECT d.bpm, d.musical_key as camelot_key, s.control_vec
-                    FROM public.track_segment s
-                    JOIN public.dj_tag d ON d.audio_file_id = s.audio_file_id AND d.owner_user_id = s.owner_user_id
-                    WHERE s.id = %s
-                    """,
-                    (state.last_segment_id,)
-                )
-                last = cur.fetchone()
-                if not last:
+                last_seg = None
+                for s in segments_cache:
+                    if s["id"] == state.last_segment_id:
+                        last_seg = s
+                        break
+                if not last_seg and state.last_segment_id == seed_segment_id:
+                    last_seg = {
+                        "id": seed_id,
+                        "audio_file_id": seed_audio_id,
+                        "control_vec_parsed": seed_vec,
+                        "confidence": 1.0
+                    }
+                
+                if not last_seg or not last_seg.get("control_vec_parsed"):
                     continue
                 
-                last_bpm = float(last["bpm"])
-                last_key = last["camelot_key"]
-                last_vec = last["control_vec"]
+                last_bpm = dj_tags_cache[state.last_audio_file_id]["bpm"]
+                last_key = dj_tags_cache[state.last_audio_file_id]["musical_key"]
+                last_vec = last_seg["control_vec_parsed"]
 
-                # Fetch matching outgoing transitions
-                cur.execute(
-                    """
-                    SELECT
-                      s.id as candidate_segment_id,
-                      s.audio_file_id,
-                      s.role,
-                      d.bpm,
-                      d.musical_key as camelot_key,
-                      (s.control_vec <=> %s::extensions.vector) as vibe_dist,
-                      COALESCE(s.confidence, 1.0) as cue_confidence
-                    FROM public.track_segment s
-                    JOIN public.dj_tag d ON d.audio_file_id = s.audio_file_id AND d.owner_user_id = s.owner_user_id
-                    WHERE s.audio_file_id != %s
-                      AND s.owner_user_id = %s
-                      AND d.bpm BETWEEN %s - 3 AND %s + 3
-                      AND s.role IN ('intro', 'rise', 'peak')
-                    ORDER BY s.control_vec <=> %s::extensions.vector
-                    LIMIT 20
-                    """,
-                    (
-                        last_vec,
-                        state.last_audio_file_id,
-                        self.config.owner_user_id,
-                        last_bpm, last_bpm,
-                        last_vec
-                    )
-                )
-                
-                for candidate in cur.fetchall():
-                    # Check if audio file already visited (no duplicate tracks in sequence)
-                    # We look up visited audio files from segment IDs
-                    visited_tracks = []
-                    # Quick check via audio file ID
-                    cur.execute(
-                        "SELECT DISTINCT audio_file_id FROM public.track_segment WHERE id = ANY(%s)",
-                        (state.path,)
-                    )
-                    visited_tracks = [row["audio_file_id"] for row in cur.fetchall()]
+                candidates = []
+                for s in segments_cache:
+                    cand_audio_id = s["audio_file_id"]
+                    if cand_audio_id == state.last_audio_file_id:
+                        continue
+                    if cand_audio_id not in dj_tags_cache:
+                        continue
+                    
+                    cand_bpm = dj_tags_cache[cand_audio_id]["bpm"]
+                    if not (last_bpm - 3.0 <= cand_bpm <= last_bpm + 3.0):
+                        continue
+                        
+                    v_dist = cosine_distance(last_vec, s["control_vec_parsed"])
+                    candidates.append({
+                        "id": s["id"],
+                        "audio_file_id": cand_audio_id,
+                        "role": s["role"],
+                        "bpm": cand_bpm,
+                        "camelot_key": dj_tags_cache[cand_audio_id]["musical_key"],
+                        "vibe_dist": v_dist,
+                        "confidence": s.get("confidence") if s.get("confidence") is not None else 1.0
+                    })
+
+                candidates.sort(key=lambda x: x["vibe_dist"])
+                candidates = candidates[:20]
+
+                for candidate in candidates:
+                    visited_tracks = set()
+                    for path_seg_id in state.path:
+                        if path_seg_id == seed_segment_id:
+                            visited_tracks.add(seed_audio_id)
+                        else:
+                            for cached_s in segments_cache:
+                                if cached_s["id"] == path_seg_id:
+                                    visited_tracks.add(cached_s["audio_file_id"])
+                                    break
                     
                     if candidate["audio_file_id"] in visited_tracks:
                         continue
 
-                    # Camelot step distance check
                     c_dist = camelot_distance(last_key, candidate["camelot_key"])
                     if c_dist > 2.0:
                         continue
 
                     edge = CandidateEdge(
-                        candidate_segment_id=str(candidate["candidate_segment_id"]),
+                        candidate_segment_id=str(candidate["id"]),
                         audio_file_id=str(candidate["audio_file_id"]),
                         vibe_dist=float(candidate["vibe_dist"]),
                         bpm_delta=abs(last_bpm - float(candidate["bpm"])),
                         camelot_dist=float(c_dist),
-                        cue_confidence=float(candidate["cue_confidence"]),
+                        cue_confidence=float(candidate["confidence"]),
                         role=str(candidate["role"])
                     )
                     
@@ -417,5 +455,4 @@ class ButterFlowPlanner:
             expanded.sort(key=lambda s: s.cost)
             beam = expanded[:beam_width]
 
-        conn.close()
         return beam

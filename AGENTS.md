@@ -1,5 +1,9 @@
 # Repository Guidelines
 
+> [!NOTE]
+> **AGENT WORKSPACE CONTEXT**
+> This agent works exclusively on `taghag`. The `tagslut` repository is READ-ONLY for this agent.
+
 ## Project Structure & Module Organization
 `web/` contains the Vite + React frontend. Primary source files live in `web/src/`, while `web/dist/` is build output and should stay generated. `tools/` contains the standalone Python importer package `taghag_import`, with tests under `tools/tests/`. Supabase assets live in `supabase/`, especially `supabase/migrations/` for source-controlled schema changes and `supabase/seed.sql` for seed data. Reusable agent prompts live in `.github/prompts/`.
 

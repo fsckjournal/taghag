@@ -273,3 +273,44 @@ class TaghagDbClient:
             "quality_check": len(quality_checks),
             "tag_evidence": len(evidence_rows),
         }
+
+    def _delete_postgrest_rows(self, table: str, query: dict[str, str]) -> None:
+        url = f"{self._config.supabase_url}/rest/v1/{table}?" + parse.urlencode(query)
+        req = request.Request(
+            url,
+            method="DELETE",
+            headers={
+                "apikey": self._config.service_role_key,
+                "Authorization": f"Bearer {self._config.service_role_key}",
+                "Content-Profile": self._config.schema,
+            },
+        )
+        try:
+            with request.urlopen(req) as response:
+                if response.status >= 300:
+                    raise RuntimeError(f"delete failed with status {response.status}")
+        except error.HTTPError as exc:
+            detail = exc.read().decode("utf-8", errors="replace")
+            raise RuntimeError(f"delete failed: {exc.code} {detail}") from exc
+
+    def _patch_postgrest_rows(self, table: str, query: dict[str, str], payload: dict[str, object]) -> None:
+        url = f"{self._config.supabase_url}/rest/v1/{table}?" + parse.urlencode(query)
+        body = json.dumps(payload).encode("utf-8")
+        req = request.Request(
+            url,
+            data=body,
+            method="PATCH",
+            headers={
+                "Content-Type": "application/json",
+                "apikey": self._config.service_role_key,
+                "Authorization": f"Bearer {self._config.service_role_key}",
+                "Content-Profile": self._config.schema,
+            },
+        )
+        try:
+            with request.urlopen(req) as response:
+                if response.status >= 300:
+                    raise RuntimeError(f"patch failed with status {response.status}")
+        except error.HTTPError as exc:
+            detail = exc.read().decode("utf-8", errors="replace")
+            raise RuntimeError(f"patch failed: {exc.code} {detail}") from exc

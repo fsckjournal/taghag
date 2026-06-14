@@ -1,5 +1,9 @@
 # Taghag Agent Rules
 
+> [!NOTE]
+> **AGENT WORKSPACE CONTEXT**
+> This agent (Antigravity) works exclusively on `taghag`. The `tagslut` repository is READ-ONLY for this agent.
+
 - MP3-only v1.
 - No FLAC, AAC, M4A, ALAC, or mixed-format intake support.
 - No old tagslut schema.

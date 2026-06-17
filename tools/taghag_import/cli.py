@@ -45,6 +45,7 @@ from .apply_human_correction import apply_human_corrections
 from .sync_vibes_to_id3 import sync_postgres_vibes_to_id3
 from .advanced_cue_planner import AnlzImporter, SegmentExtractor, ButterFlowPlanner, LIBROSA_AVAILABLE, PYREKORDBOX_AVAILABLE
 from .mixonset import MixonsetImporter
+from .apple_music_adapter import run_apple_music_ingestion
 
 
 
@@ -653,6 +654,39 @@ def _extract_dj_slice_command(args: argparse.Namespace) -> int:
     return 0
 
 
+def _analyze_apple(args: argparse.Namespace) -> int:
+    try:
+        client = TaghagDbClient(read_database_config())
+    except Exception as exc:
+        print(f"Failed to connect to database: {exc}")
+        return 1
+
+    root_path = Path(args.root).expanduser().resolve()
+    found, _ = discover_audio_files(root_path)
+    flac_paths = [Path(item.path) for item in found if Path(item.path).suffix.lower() == ".flac"]
+    
+    if not flac_paths:
+        print(f"No FLAC files found in {root_path}")
+        return 0
+        
+    print(f"Discovered {len(flac_paths)} FLAC files to analyze.")
+    try:
+        summary = run_apple_music_ingestion(client, client._config.owner_user_id, flac_paths)
+    except Exception as exc:
+        print(f"Apple Music Ingestion failed: {exc}")
+        return 1
+        
+    print("\n--- Summary ---")
+    print(f"Processed: {summary['processed']}")
+    print(f"Eligible: {summary['eligible']}")
+    print(f"Rejected (Duration): {summary['rejected_duration']}")
+    print(f"Rejected (BPM): {summary['rejected_bpm']}")
+    print(f"Rejected (Structure): {summary['rejected_structure']}")
+    print(f"Rejected (Ambient): {summary['rejected_ambient']}")
+    
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="taghag-import")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -853,6 +887,13 @@ def build_parser() -> argparse.ArgumentParser:
 
     extract_dj_slice_parser.set_defaults(func=_extract_dj_slice_command)
 
+    analyze_apple_parser = subparsers.add_parser(
+        "analyze-apple",
+        help="Run local WWDC26 MusicUnderstanding ingestion on FLACs",
+    )
+    analyze_apple_parser.add_argument("--root", required=True, help="Path to the FLAC library root")
+    analyze_apple_parser.set_defaults(func=_analyze_apple)
+
     # --- Taghag Intelligence Extensions ---
     
     # 1. Preflight
@@ -883,31 +924,41 @@ def build_parser() -> argparse.ArgumentParser:
     
     essentia.set_defaults(func=_essentia_command)
 
-    # 5. Magikbox Sub-interface
-    magikbox = subparsers.add_parser("magikbox", help="Magikbox classification and crate commands")
-    magikbox_sub = magikbox.add_subparsers(dest="subcommand", required=True)
+    # 5. Cuecifer Sub-interface
+    cuecifer = subparsers.add_parser("cuecifer", help="Cuecifer classification and crate commands")
+    cuecifer_sub = cuecifer.add_subparsers(dest="subcommand", required=True)
     
-    mag_recompute = magikbox_sub.add_parser("recompute", help="Recompute L2 normalized 7D vectors from raw analysis")
-    mag_recompute.set_defaults(func=_magikbox_recompute)
+    mag_recompute = cuecifer_sub.add_parser("recompute", help="Recompute L2 normalized 7D vectors from raw analysis")
+    mag_recompute.set_defaults(func=_cuecifer_recompute)
     
-    mag_similar = magikbox_sub.add_parser("similar", help="Find similar tracks in database")
+    mag_similar = cuecifer_sub.add_parser("similar", help="Find similar tracks in database")
     mag_similar.add_argument("--track-id", required=True, help="Database audio_file ID")
     mag_similar.add_argument("--limit", type=int, default=10, help="Max candidates")
     
-    mag_crate = magikbox_sub.add_parser("crate", help="Generate neighborhood playlist/crate")
+    mag_crate = cuecifer_sub.add_parser("crate", help="Generate neighborhood playlist/crate")
     mag_crate.add_argument("--seed-id", required=True, help="Database audio_file ID of seed track")
     mag_crate.add_argument("--out-dir", default="artifacts/crates", help="Output directory for playlist")
     mag_crate.add_argument("--limit", type=int, default=30, help="Max tracks in crate")
     
-    mag_correct = magikbox_sub.add_parser("correct", help="Apply human qualitative corrections from ID3 tags")
+    mag_correct = cuecifer_sub.add_parser("correct", help="Apply human qualitative corrections from ID3 tags")
     mag_correct.add_argument("--music-dir", required=True, help="Base music library directory")
     mag_correct.add_argument("--execute", action="store_true", help="Apply changes directly to Supabase")
     
-    mag_sync_id3 = magikbox_sub.add_parser("sync-id3", help="Sync Supabase vibes back to ID3 tags")
+    mag_sync_id3 = cuecifer_sub.add_parser("sync-id3", help="Sync Supabase vibes back to ID3 tags")
     mag_sync_id3.add_argument("--music-dir", required=True, help="Base music library directory")
     mag_sync_id3.add_argument("--execute", action="store_true", help="Apply tag modifications to MP3 files")
     
-    magikbox.set_defaults(func=_magikbox_command)
+    mag_analyze_file = cuecifer_sub.add_parser("analyze-file", help="Run local WWDC26 MusicUnderstanding ingestion on a single FLAC file")
+    mag_analyze_file.add_argument("--file", required=True, type=Path, help="Path to the FLAC file")
+    mag_analyze_file.add_argument("--dry-run", action="store_true", help="Run analyzer without saving to DB")
+    mag_analyze_file.set_defaults(func=_cuecifer_analyze_file)
+    
+    cuecifer_analyze_setlist = cuecifer_sub.add_parser("analyze-setlist", help="Analyze a DJ setlist using MLX-LM")
+    cuecifer_analyze_setlist.add_argument("--file", required=True, type=Path, help="Path to JSON setlist extracted from Cuecifer")
+    cuecifer_analyze_setlist.add_argument("--model", default="mlx-community/Qwen2.5-32B-Instruct-4bit", help="HuggingFace model ID")
+    cuecifer_analyze_setlist.set_defaults(func=_cuecifer_analyze_setlist)
+
+    cuecifer.set_defaults(func=_cuecifer_command)
 
     # 6. Cue Sub-interface
     cue = subparsers.add_parser("cue", help="Advanced Cue Intelligence commands")
@@ -1054,7 +1105,7 @@ def _essentia_command(args: argparse.Namespace) -> int:
     return 1
 
 
-def _magikbox_recompute(args: argparse.Namespace) -> int:
+def _cuecifer_recompute(args: argparse.Namespace) -> int:
     client = TaghagDbClient(read_database_config())
     owner_id = client._config.owner_user_id
     
@@ -1119,7 +1170,68 @@ def _magikbox_recompute(args: argparse.Namespace) -> int:
     return 0
 
 
-def _magikbox_command(args: argparse.Namespace) -> int:
+def _cuecifer_analyze_file(args: argparse.Namespace) -> int:
+    from taghag_import.apple_music_adapter import run_apple_music_ingestion
+    client = TaghagDbClient(read_database_config())
+    owner_id = os.environ.get("TAGHAG_OWNER_USER_ID", "d4c61173-8432-432f-b238-9bd72c7285e3")
+    
+    flac_path = args.file
+    if not flac_path.is_file():
+        print(f"Error: File not found {flac_path}")
+        return 1
+
+    print(f"Running Cuecifer on {flac_path.name}")
+    try:
+        if args.dry_run:
+            print("Dry run requested, skipping DB ingestion. Running analyzer...")
+            import subprocess
+            from taghag_import.apple_music_adapter import SWIFT_CLI_PATH
+            result = subprocess.run(
+                [str(SWIFT_CLI_PATH), str(flac_path)],
+                capture_output=True,
+                text=True,
+                check=True
+            )
+            print(result.stdout)
+            return 0
+        else:
+            stats = run_apple_music_ingestion(client, owner_id, [flac_path])
+            print(f"Ingestion complete. Status: {stats}")
+            return 0
+    except Exception as exc:
+        print(f"Failed to analyze file: {exc}")
+        return 1
+
+def _cuecifer_analyze_setlist(args: argparse.Namespace) -> int:
+    import json
+    from taghag_import.mlx_pipeline import extract_reduced_metadata, analyze_setlist_with_mlx
+    
+    file_path = args.file
+    if not file_path.is_file():
+        print(f"Error: File not found {file_path}")
+        return 1
+
+    try:
+        with open(file_path, "r", encoding="utf-8") as f:
+            raw_data = json.load(f)
+        
+        # If it's a list, reduce each item
+        if isinstance(raw_data, list):
+            reduced = [extract_reduced_metadata(item) for item in raw_data if item]
+        else:
+            reduced = [extract_reduced_metadata(raw_data)]
+            
+        print(f"Loaded {len(reduced)} tracks. Running MLX analysis...")
+        result = analyze_setlist_with_mlx(reduced, model_id=args.model)
+        if result:
+            print("\nResponse:\n" + result)
+            return 0
+        return 1
+    except Exception as exc:
+        print(f"Failed to analyze setlist: {exc}")
+        return 1
+
+def _cuecifer_command(args: argparse.Namespace) -> int:
     client = TaghagDbClient(read_database_config())
     if args.subcommand == "similar":
         generator = CrateGenerator(client)

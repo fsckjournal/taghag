@@ -13,7 +13,7 @@ def test_import_analysis_writes_metadata_only_receipt_without_db(tmp_path: Path,
         json.dumps(
             {
                 "schema": "essentia-lexicon-sidecar/2",
-                "model_profile": "magikbox-v1",
+                "model_profile": "cuecifer-v1",
                 "models": {"mood": "model-v1"},
                 "tracks": {
                     "/music/track.mp3": {

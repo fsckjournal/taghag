@@ -60,8 +60,8 @@ def test_migration_adds_updated_at_trigger_for_every_app_table() -> None:
     assert missing == []
 
 
-def test_magikbox_migration_creates_secured_track_analysis_table() -> None:
-    migration = next(migration_path().parent.glob("*_add_magikbox_track_analysis.sql"))
+def test_cuecifer_migration_creates_secured_track_analysis_table() -> None:
+    migration = next(migration_path().parent.glob("*_add_cuecifer_track_analysis.sql"))
     sql = migration.read_text(encoding="utf-8").lower()
 
     assert "create table public.track_analysis" in sql

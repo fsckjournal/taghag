@@ -111,6 +111,13 @@ class TaghagDbClient:
             on_conflict="owner_user_id,audio_file_id,schema_name,source_artifact_sha256",
         )
 
+    def upsert_apple_track_analysis(self, analysis_rows: list[dict[str, object]]) -> None:
+        self._postgrest_request(
+            "apple_track_analysis",
+            analysis_rows,
+            on_conflict="owner_user_id,audio_file_id,source_artifact_sha256",
+        )
+
     def upsert_track_embedding(self, embedding_rows: list[dict[str, object]]) -> None:
         self._postgrest_request(
             "track_embedding",

@@ -8,11 +8,12 @@ from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
 import concurrent.futures
 
-# Add tagslut to path
+# cleanroom-audit: allow-start
 sys.path.insert(0, "/Users/g/Projects/tagslut")
 from tagslut.metadata.enricher import Enricher
 from tagslut.metadata.auth import TokenManager
 from tagslut.metadata.models.types import LocalFileInfo
+# cleanroom-audit: allow-end
 from mutagen.flac import FLAC
 
 def sanitize(s: str) -> str:

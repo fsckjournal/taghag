@@ -13,7 +13,7 @@ def _write_sidecar(path: Path, *, schema: str = "essentia-lexicon-sidecar/2") ->
         json.dumps(
             {
                 "schema": schema,
-                "model_profile": "magikbox-v1",
+                "model_profile": "cuecifer-v1",
                 "models": {"genre": "discogs-effnet", "mood": "mtg-jamendo"},
                 "tracks": {
                     "/music/track.mp3": {

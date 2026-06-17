@@ -13,7 +13,6 @@ Contains high-level system design, database schemas, and integration specificati
 - `file_changes_and_library_rescan.md` - Notes on how Roon handles file modifications and library rescanning.
 - `cuecifer_overlay_design.md` - Technical design for delivering Cuecifer as an overlay to Taghag.
 - `manifest_stage_design.md` - Design document for the manifest compilation stage.
-- `mp3_tools_provider_export_design.md` - Design for MP3 tools and provider export handling.
 - `roon_extension_architecture.md` - Architectural overview of the Headless Roon Extension pivot.
 - `roon_extension_ui_actions.md` - UI & Actions spec for the Roon Extension.
 - `roon_metadata_policy.md` - Rules and policies for writing metadata recognized by Roon.
@@ -23,23 +22,19 @@ Contains high-level system design, database schemas, and integration specificati
 ## 📂 `reports/`
 Contains deep-dive technical reports, intelligence engine whitepapers, and phase summaries.
 - `autonomous_intelligence_engine_whitepaper.md` - The complete technical whitepaper and datasheet for the Cuecifer intelligence engine.
-- `dj_intelligence_integration.md` - Details on the integration of DJ intelligence into the Cuecifer workflow.
 - `cuecifer_a_z_technical_report.md` - Comprehensive A-Z technical summary of the Cuecifer engine.
 - `cuecifer_phase_2_report.md` - Summary of accomplishments from Phase 2 of the Cuecifer sprint.
-- `mixonset_analysis_report.md` - Raw analysis and reverse engineering report for Mixonset `.dat` structures.
 - `taghag_intelligence_engine_deep_dive.md` - Specific deep-dive covering the Supabase vectors and cue pathfinder.
 - `tier_review.md` - Manual tier review and dataset validation summary.
 
 ## 📂 `management/`
-Contains project planning, handovers, and historical milestone briefs.
-- `foundation_implementation_plan.md` - Historical plan for the Taghag foundation.
-- `handover.md` - AI intelligence handover notes between sprints.
+Contains project planning and historical milestone briefs.
 - `manifest_stage_plan.md` - Implementation plan for the manifest stage.
-- `master_implementation_plan.md` - The master roadmap and implementation plan.
-- `merge_cuecifer_plan.md` - Execution plan for merging Cuecifer intelligence layers.
-- `mp3_tools_provider_export_plan.md` - Execution plan for the MP3 exporter.
 - `project_brief.md` - The original Gemini Project Brief.
 - `taghag_stage_pipeline_plan.md` - Implementation plan for the stage pipeline.
+
+## 📂 `archive/`
+Contains historically obsolete execution plans and legacy MP3/Rekordbox-era designs. Agents should ignore these unless instructed otherwise.
 
 ## 📂 `guides/`
 Contains troubleshooting, operational references, and issue resolution guides.

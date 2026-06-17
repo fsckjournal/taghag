@@ -1,72 +1,28 @@
-# Autonomous Intelligence Engine Export Design
+# Autonomous Intelligence Engine (Cuecifer) Architecture
 
-## 1. Consolidated Report: A to Z of the "Cuecifer" Sprint
+## 1. Executive Vision
+The Cuecifer intelligence engine operates within the `taghag` repository as a deterministic music-library intelligence system. The core thesis is to computationally sequence setlists and validate metadata better than human intuition by merging structural DSP data, acoustic "vibe" analysis, and local Large Language Model (LLM) reasoning.
 
-### 1.1 The Theoretical Beginning
-The "Cuecifer" initiative started in `taghag` as an experimental framework to generate autonomous, superhuman DJ transitions. The core thesis was that if we could merge structural data (intro/outro markers), harmonic energy mapping, and acoustic "vibe" analysis, we could computationally sequence a setlist better than human intuition. 
+Legacy DJ/Rekordbox-centric workflows have been permanently retired. The active path relies on high-fidelity source files and local Apple-native AI/ML workflows.
 
-### 1.2 The "Trinity" of Reverse-Engineering
-During Phase 2, we moved from theory to hard production by reverse-engineering three disparate intelligence layers:
-- **Structural (Mixonset Sandbox):** We decrypted the proprietary local `.dat` files from the Offtrack/Mixonset application. We built translation engines to map their integer key codes to standard Camelot formats and extracted precise physical beat grids and segment boundaries (intros, drops, outros).
-- **Acoustic (Essentia 7D):** We orchestrated local Python scripts utilizing the Essentia audio analysis library. By running this against our physical audio segments, we computed 7-dimensional `control_vec` embeddings (danceability, mood, energy) to map the acoustic "vibe" of tracks mathematically.
-- **Harmonic Energy (Beatport iWebDJ):** By intercepting raw `.har` network traffic during live Beatport DJ sessions, we decoded the undocumented `metadata.php` `iwebdj` payload. We extracted mathematical energy envelopes (`a0`-`a5`), dynamic beat markers (`bm0`), and structural timelines.
+## 2. The Core Pipeline: Apple Native Intelligence
+To achieve a three-dimensional understanding of every track, the pipeline has been rebuilt to rely heavily on Apple Silicon capabilities rather than cloud APIs or third-party DJ software.
 
-### 1.3 The Flaw & The Pivot
-While the intelligence extraction was a monumental success, the surrounding infrastructure became a liability. The `taghag` repository was heavily coupled to:
-1. **Supabase/Vercel:** Cloud-based postgres and React frontends that drastically increased latency and development friction.
-2. **MP3s & Rekordbox:** Legacy paradigms that constrained audio fidelity and forced us to rely on the DJ software sandbox.
+### 2.1 The Structural Layer (MusicUnderstanding)
+We extract offline structural analysis directly from high-fidelity source files (typically FLAC masters) using a native Swift CLI built on Apple's WWDC26 `MusicUnderstanding` framework. 
+*   **Outputs:** This yields precise `StructureResult` segment boundaries (intros, outros, drops), `HarmonicResult` (tonic/mode), `RhythmResult` (BPM/pace), and `LoudnessResult` (ITU-R BS.1770 LUFS).
+*   **Concurrency Sandbox:** Since executing native Swift `MusicUnderstanding` analysis across hundreds of concurrent threads triggers `AVFoundation` and Metal memory-lock exhaustion (`kIOGPUCommandBufferCallbackErrorOutOfMemory`), the Swift binary execution is strictly sandboxed. It is managed by a Python `ProcessPoolExecutor` throttled to exactly 4 workers, ensuring total pipeline stability.
 
-Since we have now pivoted to a pure **FLAC/Roon/Local SQLite** architecture in `tagslut`, the cloud dependencies are dead weight, and the "Cuecifer" codename (referencing Rekordbox) is absurd. 
+### 2.2 The Reasoning Layer (MLX-LM)
+Structural DSP data provides the acoustic reality, but an intelligence engine must reason over that data to propose setlists, detect anomalies, or normalize genres.
+*   **Native 32B Inference:** We utilize `mlx-community/Qwen2.5-32B-Instruct-4bit` running natively via `mlx-lm` on Apple Silicon Unified Memory.
+*   **Hardware Overrides:** The 32B model requires approximately 18GB of memory. On a 24GB Unified Memory system, macOS default safety thresholds normally block this allocation. To bypass Metal Out-of-Memory aborts, the system utilizes an experimental override: `sudo sysctl iogpu.wired_limit_mb=21504`. This allocates 21GB exclusively to the active GPU memory, allowing stable inference at ~3.3 tokens/second. 
 
-This document serves as the clean-room export design to port the raw intelligence engine out of `taghag` and back into `tagslut` under a new naming convention, and expose it natively through the Roon user interface.
+## 3. Strict Architectural Boundaries
 
----
+To ensure the safety of the canonical library, the intelligence engine operates under several strict, non-negotiable boundaries:
 
-## 2. Export Purpose & Scope
-
-The purpose of this export is to isolate the useful Python intelligence logic (Mixonset, Essentia, Beatport decoders, and Beam Search Pathfinder) and wire them directly into the `tagslut` SQLite/FLAC architecture. 
-
-The exported tools must run natively inside the `tagslut` backend. They must reuse the existing local SQLite `music_v3.db` and drop all runtime dependencies on Supabase schemas, REST clients, Vercel infrastructure, and DJ Beatport `.har` network trace scratching.
-
-### 2.1 The Roon Extension Frontend
-Instead of a React web app, the user interface for this engine will be a headless Node.js Roon Extension (`tagslut/roon-extension`).
-- The extension subscribes to Roon's "Now Playing" transport.
-- The user triggers actions directly via the Roon Settings/Extensions menu.
-- A Python bridge (`bridge.py`) receives the track's Artist and Title, queries `music_v3.db` for the absolute filesystem path, and directly executes the Tagslut tagging pipeline via a subprocess.
-
-## 3. Existing Module Reuse & MP3 Portability
-
-While the goal is to support FLAC, any generic extraction or tagging tool built in `taghag` that can safely operate on FLAC or general audio files must be preserved. 
-
-**Modules to directly reuse/port to `tagslut`:**
-- `tools/taghag_import/advanced_cue_planner.py`: The core Beam Search routing logic for generating setlists.
-- `tools/taghag_import/beatport_resolver.py`: The iWebDJ decoding matrix and catalog search.
-- `tools/taghag_import/essentia_adapter.py` & `sonic_discovery.py`: Vibe extraction.
-- `tools/taghag_import/mixonset.py`: The `.dat` decryption and mapping.
-- `tools/taghag_import/tags.py`: Binary-safe tag dumping and writing. *This module was initially designed for MP3 ID3 tags, but its structural safety and dry-run boundaries make it an excellent template for Vorbis comment manipulation in FLAC.*
-- `tools/taghag_import/genre.py` & `genre_rules.json`: General purpose case-insensitive genre normalization.
-
-## 4. The Clean-Room Boundary
-
-Codex must execute this port strictly observing these boundaries. The target implementation must **NOT** include:
-
-- Any code importing or wrapping `db_client.py`. All Supabase REST interactions are strictly forbidden and must be rewritten by Opus to execute native `sqlite3` queries against `music_v3.db`.
-- The name "Cuecifer" in active code, configuration, or new documentation.
-- The `web/` and `supabase/` folders.
-- The root-level scratch files (`dj.beatport.com*.har`, `.csv`, `.txt`, `.m3u`, `.m3u8`).
-- Dependencies on legacy Taghag environment variables (`TAGHAG_SUPABASE_URL`, etc.).
-
-## 5. Re-Architecting Database Interactions
-
-Opus is tasked with refactoring the data flow. 
-
-In `taghag`, vectors, cues, and segments were written via `TaghagDbClient._postgrest_request()`. In `tagslut`, Opus must design a new `sqlite3` data-access layer that maps these entities to the local schema. 
-- The `track_embedding` 7D vectors must be serialized safely into SQLite.
-- The `track_segment` and `dj_tag` data must be merged natively into the `tagslut` track models.
-
-## 6. Testing & Validation
-
-The exported engine must pass the following validation in `tagslut`:
-1. **No Cloud Calls:** The system must run end-to-end (Essentia extraction -> Beam Search) without any internet connection, proving the Supabase decoupling.
-2. **Audio Agnosticism:** The intelligence engine must successfully process a directory of FLAC files, verifying that legacy MP3 coupling has been removed.
-3. **Decoder Reliability:** The `test_beatport_resolver.py` module must pass against a local, sanitized set of fixture payloads, proving the iWebDJ logic works independently of live Beatport API scraping.
+1. **ML is never metadata authority:** LLMs may propose, cluster, explain, or flag metadata. However, Taghag's deterministic policy engine decides, audits, and writes. No ML output may directly mutate the underlying audio files (e.g. FLAC metadata tags) without passing the validation gate.
+2. **MusicUnderstanding does NOT return genre:** The 6 dimensions of `MusicUnderstanding` (key, rhythm, structure, pace, instrument activity, loudness) are strictly empirical, acoustic measurements. Genre is a cultural taxonomy. Under no circumstances should downstream agents or scripts treat these acoustic dimensions as a direct genre classification.
+3. **Hardware Overrides are Experimental:** While the `sysctl` memory expansion is operator-proven for local research and inference, override-dependent workflows must never be placed on an unsupervised, automated metadata-write path.
+4. **Cleanroom Adherence:** The codebase must not invoke legacy libraries (`tagslut`, `Rekordbox`, etc.) unless specifically permitted by the `audit_cleanroom.py` script exclusions.

@@ -107,10 +107,7 @@ Apple lists six analysis areas. Below we detail each capability (with evidence s
   *Value meaning:* Perceived loudness and dynamic range of the music. Integrated is an overall average. Momentary/shortTerm show loudness fluctuations. Peak is the maximum instantaneous level.  
   *Limitations:* Uses ITU-R BS.1770 standard (LUFS), but Apple does not expose the formulas. The sample shows integrated as single value (time should be track length) and a time series for momentary/shortTerm. No uncertainties are given. Loudness results are also available via a streaming AsyncSequence for real-time use. This is **(Documented by Apple)**.
 
-Each capability above is confirmed by Apple’s documentation or WWDC session code examples. We have *not* found any Apple references to additional fields or outputs. 
-
-**CRITICAL RULE: The Distinction Between DSP and Genre**
-The `MusicUnderstanding` framework analyzes the physical reality of the audio signal. Its six dimensions (key, rhythm, structure, pace, instrument activity, and loudness) are strictly empirical, acoustic measurements. Genre, on the other hand, is a cultural, marketing-driven taxonomy. There is no such thing as a "Deep House" waveform. `MusicUnderstanding` does not output genre, and treating its output as a direct "genre signal" compromises the integrity of the data. The DSP output must be treated strictly as structural evidence, avoiding the trap of confusing acoustic realities with cultural classifications.
+Each capability above is confirmed by Apple’s documentation or WWDC session code examples. We have *not* found any Apple references to additional fields or outputs. For example, no confidence scores or genre classification appear in any official material.
 
 ## API Usage Pattern
 
@@ -350,7 +347,7 @@ These innovations aim to make the Cuecifer engine more robust and insightful, us
 - **Don't Discard Raw JSON:** Always keep the raw output in case we need to explain why a decision was made. Downstream features should reference raw data, not throw it away.  
 - **Don't Invent Confidence Measures:** The framework does not provide confidences. Do not create fake “confidence” metrics without basis. Instead, infer confidence from feature consistency or source agreement.  
 - **Don't Over-Aggregate Too Early:** For example, don’t reduce the entire structure to one average phrase length. Preserve segment-level detail until it’s no longer needed.  
-- **LLMs and Offline Reasoning:** We utilize `MLX-LM` (specifically `Qwen2.5-32B-Instruct-4bit`) natively on Apple Silicon to reason over the raw DSP vectors provided by `MusicUnderstanding`. However, this is strictly an *offline* metadata review and planning workflow. Do not attempt to call an LLM in the hot path of live audio transitions. Furthermore, the 32B model requires overriding macOS memory limits via `sudo sysctl iogpu.wired_limit_mb=21504`; this is an experimental override lane, not a production-safe unsupervised baseline.
+- **Don't Put LLMs in Hot Path:** While we have other AI tools, don’t attempt to call an LLM during live transitions. Use Music Understanding’s deterministic outputs instead.  
 - **Don't Build UI Before Validation:** Before creating complex user interfaces (e.g. for transition suggestions), first ensure the Apple features align with musical intuition on a test corpus.  
 - **Don't Export without Checks:** If writing tags back to music files (Rekordbox, etc.), only do so after verifying Apple’s values with existing data or human review to avoid corrupting a clean database.
 
@@ -408,7 +405,7 @@ In reviewing our internal docs, we corrected the following misunderstandings:
 
 - **Apple Output Trust:** The old draft implied we could simply replace our BPM/key with Apple’s. In reality, we should treat Apple’s results as *additional data*, not the single source of truth. We will preserve legacy values and add Apple’s as a hybrid system.  
 - **7D Vector Ambiguity:** The term “7D” was used inconsistently. We clarified that this is legacy and will remain separate. The Apple-hybrid vector will be documented with each dimension’s meaning.  
-- **Data Sources:** References to using generative LLMs in the live mix are out-of-scope. However, offline use of `MLX-LM` to reason over the `MusicUnderstanding` JSON output is a fully supported and tested workflow (via Python). Apple Music Understanding itself does not involve external LLMs. We also removed any suggestion that Apple Music playlists could feed directly into this analysis.
+- **Data Sources:** References to using “MLX” or generative LLMs in the live mix are out-of-scope and removed. Apple Music Understanding does not involve external LLMs during performance. We also removed any suggestion that Apple Music playlists could feed directly into this analysis.  
 - **Protected Content:** Earlier notes mistakenly hinted at analyzing Apple Music content. We removed that; the framework only analyzes playable audio files.  
 - **Performance Claims:** We had no data on runtime. We removed any assumption that analysis is “instant” or “real-time” and instead plan to benchmark it.  
 

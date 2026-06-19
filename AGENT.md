@@ -4,8 +4,8 @@
 > **AGENT WORKSPACE CONTEXT**
 > This agent (Antigravity) works exclusively on `taghag`. The `tagslut` repository is READ-ONLY for this agent.
 
-- MP3-only v1.
-- No FLAC, AAC, M4A, ALAC, or mixed-format intake support.
+- Natively processes lossless FLAC files.
+- Native FLAC support only. No AAC, M4A, ALAC, or mixed-format intake support.
 - No old tagslut schema.
 - Do not reference the source project package from code.
 - Do not create or use `asset_file`, `track_identity`, or `preferred_asset`.

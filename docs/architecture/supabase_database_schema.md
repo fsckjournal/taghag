@@ -3,7 +3,7 @@
 This document describes how to create the Supabase database used by Taghag and
 the Cuecifer analysis layer.
 
-Taghag is MP3-only and metadata-only. The database stores local-file metadata,
+Taghag natively processes lossless FLAC files and is metadata-only. The database stores local-file metadata,
 tagging decisions, import receipts, evidence, quality checks, crates, saved
 views, and Cuecifer analysis outputs. It does not store audio bytes, derived
 audio snippets, cloud object paths, or local file-moving state.
@@ -16,7 +16,7 @@ the architecture.
 
 This decision separates the system into two boundaries:
 
-- Local disks hold MP3 files and local analysis artifacts.
+- Local disks hold FLAC files and local analysis artifacts.
 - Supabase holds metadata, receipts, tags, evidence, analysis results, crates,
   saved views, and authenticated ownership.
 
@@ -38,7 +38,7 @@ the current Supabase free-tier quotas.
 The source-controlled database lives in `supabase/migrations/` and is applied
 in timestamp order:
 
-1. `20260606000000_initial_mp3_metadata_schema.sql`
+1. `20260606000000_initial_audio_metadata_schema.sql`
 2. `20260607203437_add_cuecifer_track_analysis.sql`
 
 The initial migration creates the Taghag core:
@@ -46,8 +46,8 @@ The initial migration creates the Taghag core:
 | Table | Purpose |
 | --- | --- |
 | `import_run` | One scanner/importer run and its receipt summary. |
-| `mp3_file` | Durable metadata row for a local MP3 file. `file_key` is owner-scoped and unique. |
-| `mp3_observation` | Per-run observation of a local path, checksum, and status. |
+| `audio_file` | Durable metadata row for a local FLAC file. `file_key` is owner-scoped and unique. |
+| `audio_observation` | Per-run observation of a local path, checksum, and status. |
 | `dj_tag` | Operator-facing per-file metadata, tags, rating, notes, and manual override state. |
 | `tag_evidence` | Provider evidence such as ISRC lookups and candidate fields. |
 | `quality_check` | Decode, duration, bitrate, missing-tag, and duplicate issue records. |
@@ -59,7 +59,7 @@ The Cuecifer migration adds:
 
 | Table | Purpose |
 | --- | --- |
-| `track_analysis` | Metadata-only Essentia/Cuecifer attributes for an existing `mp3_file`. |
+| `track_analysis` | Metadata-only Essentia/Cuecifer attributes for an existing `audio_file`. |
 
 `track_analysis` currently stores the five Cuecifer attributes:
 
@@ -129,7 +129,7 @@ TAGHAG_SUPABASE_SECRET_KEY=
 TAGHAG_OWNER_USER_ID=<auth.users.id for the library owner>
 TAGHAG_DB_SCHEMA=public
 TAGHAG_IMPORT_ACTOR_ID=<operator/user id if needed by future tooling>
-TAGHAG_MP3_OUTPUT_ROOT=/Volumes/LOSSY/taghag
+TAGHAG_FLAC_OUTPUT_ROOT=/Volumes/LOSSY/taghag
 ```
 
 Frontend values must be publishable/browser-safe only:
@@ -152,10 +152,10 @@ when it uploads receipt events.
 
 The important identity rules are:
 
-- `mp3_file.id` is the durable internal database key.
+- `audio_file.id` is the durable internal database key.
 - `file_key` is the importer-owned local file identity and is unique per owner.
 - ISRC is evidence, not identity, and is intentionally not unique.
-- Cuecifer `track_analysis` attaches to `mp3_file` through `(mp3_file_id,
+- Cuecifer `track_analysis` attaches to `audio_file` through `(audio_file_id,
   owner_user_id)`.
 - Local audio paths are operational metadata; local audio bytes stay on disk.
 
@@ -189,11 +189,11 @@ The high-level relationship graph is:
 ```text
 auth.users
   -> import_run
-       -> mp3_observation
+       -> audio_observation
        -> quality_check
-  -> mp3_file
+  -> audio_file
        -> dj_tag
-       -> mp3_observation
+       -> audio_observation
        -> quality_check
        -> tag_evidence
        -> crate_track
@@ -205,9 +205,9 @@ auth.users
 
 Important constraints:
 
-- `mp3_file` is unique on `(owner_user_id, file_key)`.
-- `dj_tag` is unique on `(owner_user_id, mp3_file_id)`.
-- `track_analysis` is unique on `(owner_user_id, mp3_file_id, schema_name,
+- `audio_file` is unique on `(owner_user_id, file_key)`.
+- `dj_tag` is unique on `(owner_user_id, audio_file_id)`.
+- `track_analysis` is unique on `(owner_user_id, audio_file_id, schema_name,
   source_artifact_sha256)`.
 - Cross-table foreign keys include `owner_user_id` so records cannot silently
   attach across owners.
@@ -224,8 +224,8 @@ from information_schema.tables
 where table_schema = 'public'
   and table_name in (
     'import_run',
-    'mp3_file',
-    'mp3_observation',
+    'audio_file',
+    'audio_observation',
     'dj_tag',
     'tag_evidence',
     'quality_check',
@@ -248,8 +248,8 @@ where relnamespace = 'public'::regnamespace
   and relkind = 'r'
   and relname in (
     'import_run',
-    'mp3_file',
-    'mp3_observation',
+    'audio_file',
+    'audio_observation',
     'dj_tag',
     'tag_evidence',
     'quality_check',
@@ -283,8 +283,8 @@ from information_schema.role_table_grants
 where table_schema = 'public'
   and table_name in (
     'import_run',
-    'mp3_file',
-    'mp3_observation',
+    'audio_file',
+    'audio_observation',
     'dj_tag',
     'tag_evidence',
     'quality_check',
@@ -317,12 +317,12 @@ Use this order when creating a fresh Taghag/Cuecifer database:
 1. Apply both migrations.
 2. Create or identify the owner user in Supabase Auth.
 3. Configure server-side env vars with the service-role key and owner id.
-4. Import MP3 metadata:
+4. Import FLAC metadata:
 
    ```bash
    cd tools
    taghag-import import-batch \
-     --root /Volumes/LOSSY/taghag/identified/mp3 \
+     --root /Volumes/LOSSY/taghag/identified/flac \
      --run-name identified
    ```
 
@@ -330,21 +330,23 @@ Use this order when creating a fresh Taghag/Cuecifer database:
 
    ```bash
    taghag-import import-batch \
-     --root /Volumes/LOSSY/taghag/identified/mp3 \
+     --root /Volumes/LOSSY/taghag/identified/flac \
      --run-name identified-with-evidence \
      --postman-evidence /path/to/evidence.log
    ```
 
-6. Import Cuecifer/Essentia sidecars only after the corresponding MP3 files
-   already exist in `mp3_file`:
+6. Run Apple Music Understanding analysis only after the corresponding FLAC
+   files already exist in `audio_file`:
 
    ```bash
-   taghag-import import-analysis \
-     --input /path/to/essentia-sidecar.json
+   taghag-import analyze \
+     --target /path/to/flac-or-directory
    ```
 
-The analysis import resolves each sidecar track by Taghag `file_key`, then
-looks up the corresponding `mp3_file.id`. Unmatched analysis rows are counted
+The Apple analysis command resolves each FLAC by Taghag `file_key`, then stores
+raw analyzer provenance in `apple_analysis_runs`, normalized curves in
+`apple_track_analysis`, derived scalars in `apple_derived_features`, and Apple
+segments/cues in `track_segment` and `track_cue`. Unmatched files are counted
 and skipped rather than creating orphan records.
 
 ## Cuecifer Expansion Notes
@@ -380,9 +382,9 @@ Typical operator flow:
 ```bash
 cd tools
 python cuecifer/sonic_discovery.py recompute-all
-python cuecifer/crates.py --seed /absolute/path/to/track.mp3 --limit 30 --out-dir ../artifacts/crates
+python cuecifer/crates.py --seed /absolute/path/to/track.flac --limit 30 --out-dir ../artifacts/crates
 python cuecifer/map.py --out-dir ../artifacts/cuecifer_map
-python cuecifer/human_correction.py apply --music-dir /Volumes/LOSSY/taghag/mp3s --execute
+python cuecifer/human_correction.py apply --music-dir /Volumes/LOSSY/taghag/flacs --execute
 python cuecifer/human_correction.py audit --out ../artifacts/manual_review_needed.csv
 python cuecifer/sync_vibes.py --execute
 ```
@@ -390,7 +392,7 @@ python cuecifer/sync_vibes.py --execute
 `sonic_discovery.py` reads `track_analysis` and `dj_tag`, computes the
 normalized `sonic7_v1` vector, and upserts `track_embedding`. `human_correction.py`
 writes pinned corrections into `track_curation`, and `sync_vibes.py` writes the
-resolved vibe list back into local MP3 comments.
+resolved vibe list back into local FLAC comments.
 
 ## Operational Notes
 

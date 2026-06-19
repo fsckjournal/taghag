@@ -7,10 +7,10 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Iterable
 
-from .audio_probe import probe_mp3
+from .audio_probe import probe_flac
 from .discover import DiscoveryRecord, discover_audio_files
 from .genre import classify_genre
-from .tags import extract_mp3_tags
+from .tags import extract_flac_tags
 
 
 MISSING_TAG_ISSUES = {
@@ -107,8 +107,8 @@ def _issue_counts(records: Iterable[dict[str, object]]) -> dict[str, int]:
 
 def _audit_record(item: DiscoveryRecord) -> dict[str, object]:
     path = Path(item.path)
-    tags = extract_mp3_tags(path)
-    probe = probe_mp3(path)
+    tags = extract_flac_tags(path)
+    probe = probe_flac(path)
     canonical = classify_genre(tags.get("genre") or tags.get("subgenre"))
     issue_codes = sorted(
         set(list(probe.get("issue_codes", []) or []) + metadata_issue_codes(tags, canonical))
@@ -164,7 +164,7 @@ def run_audio_audit(
     if not root_path.exists():
         raise FileNotFoundError(root_path)
     if not root_path.is_dir():
-        raise ValueError(f"MP3 audit root is not a directory: {root_path}")
+        raise ValueError(f"FLAC audit root is not a directory: {root_path}")
 
     resolved_output = (
         Path(output_dir).expanduser().resolve() if output_dir else default_audit_output_dir().resolve()

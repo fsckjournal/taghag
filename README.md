@@ -1,6 +1,6 @@
 # Taghag
 
-Taghag is a clean-room, multi-format private DJ metadata app. It keeps audio files on local disks and stores only metadata, tagging decisions, crate organization, and import receipts in the database.
+Taghag is a clean-room, FLAC-native private DJ metadata app. It keeps audio files on local disks and stores only metadata, tagging decisions, crate organization, and import receipts in the database.
 
 ## What Taghag is
 
@@ -10,9 +10,9 @@ Taghag is a private control surface for DJs who want to scan local audio librari
 
 This repository does not inherit legacy schema design, code imports, or mixed-format assumptions from the old tagslut project. Taghag is a fresh schema and app boundary built specifically for audio-first metadata workflows.
 
-## Multi-format scope
+## FLAC-native scope
 
-Taghag accepts `.mp3` and `.flac` files, including robust local staging and deduplication for FLAC-to-MP3 transcoding.
+Taghag strictly accepts `.flac` files. All local staging, deduplication, and database ingestion operate natively on lossless audio.
 
 ## Metadata-only database model
 
@@ -95,7 +95,7 @@ taghag-import import-batch --root /path/to/audio-library --run-name first-import
 
 ## Legacy DJ slice backfill
 
-Extract the core MP3 DJ slice from a legacy `music_v3.db` snapshot and upsert it into the clean-room `audio_file` and `dj_tag` tables:
+Extract the core FLAC DJ slice from a legacy `music_v3.db` snapshot and upsert it into the clean-room `audio_file` and `dj_tag` tables:
 
 ```bash
 cd tools
@@ -110,7 +110,7 @@ Write metadata-only JSONL, CSV, and summary reports for a local audio tree:
 
 ```bash
 cd tools
-taghag-import audit-mp3 \
+taghag-import audit-flac \
   --root /path/to/audio-library \
   --output-dir ../artifacts/audio_audit/manual-check
 ```
@@ -124,7 +124,7 @@ Dump readable ID3/Vorbis frames for explicit audio files or a whole audio root:
 ```bash
 taghag-import dump-tags \
   --root /path/to/audio-library \
-  --out ../artifacts/mp3_tags.jsonl
+  --out ../artifacts/flac_tags.jsonl
 ```
 
 Binary frames such as artwork are summarized by byte count. To plan selective
@@ -174,34 +174,32 @@ normal receipt-first importer:
 
 ```bash
 taghag-import import-batch \
-  --root /path/to/mp3-library \
+  --root /path/to/flac-library \
   --postman-evidence ../artifacts/provider_evidence/manual-check/provider_evidence.log \
   --no-upload
 ```
 
-## Essentia metadata import
+## Apple Music Understanding analysis
 
-Taghag accepts `essentia-lexicon-sidecar/2` analysis artifacts and uploads only
-metadata. MP3 audio remains on local disks.
+Taghag runs the local Cuecifer Swift analyzer over registered FLACs and stores
+Apple Music Understanding outputs as deterministic analysis data. The raw
+analyzer JSON is kept in `apple_analysis_runs`, normalized global curves land in
+`apple_track_analysis`, scalar features land in `apple_derived_features`, and
+sections, segments, phrases, beats, and bars are written to `track_segment` and
+`track_cue`.
 
-Each track should include its Taghag `file_key`. For migration artifacts that
-predate Taghag, the importer can calculate the key when the referenced local
-audio path still exists.
-
-Write and inspect a receipt without contacting Supabase:
+Run a local analyzer smoke test without contacting Supabase:
 
 ```bash
 cd tools
-taghag-import import-analysis \
-  --input /path/to/sidecar.json \
-  --receipt-dir ../artifacts/analysis_imports \
-  --no-upload
+taghag-import analyze \
+  --target /path/to/flac-or-directory \
+  --dry-run
 ```
 
-Remove `--no-upload` to resolve each `file_key` against an existing `audio_file`
-row and upsert the five Cuecifer attributes, genre candidates, model metadata,
-and source-artifact digest into `track_analysis`. Audio bytes, model inputs,
-and temporary analysis files are never included in database payloads.
+Remove `--dry-run` to resolve each FLAC by its existing `audio_file.file_key`
+and upload the Apple raw run, normalized curves, derived scalars, segments, and
+cues. The pipeline does not call an LLM or upload audio bytes.
 
 ## Cuecifer engine and sync tools
 
@@ -214,39 +212,16 @@ Run it from `tools/` with the owner-scoped database env vars:
 ```bash
 cd tools
 python cuecifer/sonic_discovery.py recompute-all
-python cuecifer/sonic_discovery.py similar --path /absolute/path/to/track.mp3 --limit 10
-python cuecifer/crates.py --seed /absolute/path/to/track.mp3 --limit 30 --out-dir ../artifacts/crates
+python cuecifer/sonic_discovery.py similar --path /absolute/path/to/track.flac --limit 10
+python cuecifer/crates.py --seed /absolute/path/to/track.flac --limit 30 --out-dir ../artifacts/crates
 python cuecifer/map.py --out-dir ../artifacts/cuecifer_map
-python cuecifer/human_correction.py apply --music-dir /Volumes/LOSSY/taghag/mp3s --execute
+python cuecifer/human_correction.py apply --music-dir /Volumes/LOSSY/taghag/flacs --execute
 python cuecifer/human_correction.py audit --out ../artifacts/manual_review_needed.csv
 python cuecifer/sync_vibes.py --execute
 ```
 
 `human_correction.py` upserts pinned rows into `track_curation`, and
-`sync_vibes.py` writes the resolved vibes back into local MP3 comments.
-
-## Local FLAC-to-MP3 transcode
-
-Taghag includes a database-free transcode command. It recursively discovers
-FLAC files, mirrors their folder structure, copies source metadata through
-FFmpeg, and writes 320 kbps MP3 files. Existing non-empty MP3 files are skipped.
-This is local preprocessing that produces MP3 inputs; FLAC remains outside
-Taghag database intake.
-
-Preview the Qobuz staging batch without writing anything:
-
-```bash
-cd tools
-taghag-import transcode \
-  --source /Volumes/MUSIC/staging/StreamripDownloads-2/Qobuz \
-  --dry-run
-```
-
-Set `TAGHAG_MP3_OUTPUT_ROOT=/Volumes/LOSSY/taghag` in your local `.env` to
-make that the default output root for both `transcode` and `stage`. Remove
-`--dry-run` to transcode. This command does not read or write Tagslut,
-Supabase, or any other database. Per-file progress is printed by default; add
-`--quiet` for summary-only output.
+`sync_vibes.py` writes the resolved vibes back into local FLAC comments.
 
 ## End-to-end FLAC staging
 
@@ -259,7 +234,7 @@ taghag-import stage \
 ```
 
 The command validates FLACs, hashes canonical decoded PCM, blocks duplicate
-audio even across compilations, transcodes admitted tracks, validates MP3s, and
+audio even across compilations, stages admitted tracks, validates FLACs, and
 writes local reports and a metadata-only receipt. Source FLACs are never moved
 or deleted, and neither Tagslut nor Supabase is accessed. Add `--dry-run` to
 perform the full validation and dedupe plan without writing the output tree.

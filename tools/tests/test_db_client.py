@@ -47,8 +47,8 @@ def test_upload_receipt_events_uses_canonical_tables(monkeypatch) -> None:
         },
         {
             "event_type": "audio_observed",
-            "audio_file": {"file_key": "sha256:abc", "path": "/x.mp3", "filename": "x.mp3"},
-            "audio_observation": {"import_run_id": "run-id", "observed_path": "/x.mp3", "status": "observed"},
+            "audio_file": {"file_key": "sha256:abc", "path": "/x.flac", "filename": "x.flac"},
+            "audio_observation": {"import_run_id": "run-id", "observed_path": "/x.flac", "status": "observed"},
             "dj_tag": {"artist": "A", "title": "T"},
         },
         {

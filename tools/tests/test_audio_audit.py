@@ -12,13 +12,13 @@ def test_run_audio_audit_writes_metadata_only_reports(
 ) -> None:
     root = tmp_path / "music"
     root.mkdir()
-    mp3 = root / "track.mp3"
+    mp3 = root / "track.flac"
     mp3.write_bytes(b"local-audio-bytes")
     (root / "source.flac").write_bytes(b"flac-audio-bytes")
 
     monkeypatch.setattr(
         audio_audit,
-        "extract_mp3_tags",
+        "extract_flac_tags",
         lambda path: {
             "artist": "Artist",
             "title": "Title",
@@ -42,7 +42,7 @@ def test_run_audio_audit_writes_metadata_only_reports(
     )
     monkeypatch.setattr(
         audio_audit,
-        "probe_mp3",
+        "probe_flac",
         lambda path: {
             "duration_s": 180.5,
             "bitrate_kbps": 320,

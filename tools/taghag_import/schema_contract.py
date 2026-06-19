@@ -18,7 +18,7 @@ APP_TABLES = (
 
 # cleanroom-audit: allow-start
 FORBIDDEN_SCHEMA_TERMS = (
-    "mp3_track",
+    "flac_track",
     "asset_file",
     "track_identity",
     "asset_link",

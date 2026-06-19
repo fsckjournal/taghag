@@ -9,8 +9,8 @@ from pathlib import Path
 from typing import Any
 import uuid
 
-from .audio_probe import probe_mp3
-from .analysis_import import build_analysis_import_records
+from .audio_probe import probe_flac
+
 from .config import read_database_config
 from .db_client import TaghagDbClient
 from .discover import discover_audio_files
@@ -28,18 +28,16 @@ from .provider_runner import (
 from .flac import extract_flac_tags
 from .receipt import append_receipt, event, receipt_path_for_run, read_receipt, write_receipt
 from .tags import (
-    apply_mp3_tag_updates,
+    apply_flac_tag_updates,
     compute_file_identity,
-    dump_mp3_tags,
-    extract_mp3_tags,
+    dump_flac_tags,
+    extract_flac_tags,
 )
 from .stage import execute_stage, plan_stage, plan_stage_manifest
 from .transcode import build_transcode_plan, execute_transcode_plan
 
 from .beatport_auth import BeatportAuthManager
 from .beatport_resolver import BeatportResolver
-from .essentia_adapter import EssentiaAdapter
-from .sonic_discovery import compute_sonic_vector, classify_producer_vibes, classify_complexity_tags
 from .generate_neighborhood_crate import CrateGenerator
 from .apply_human_correction import apply_human_corrections
 from .sync_vibes_to_id3 import sync_postgres_vibes_to_id3
@@ -63,7 +61,7 @@ def _extract_tags(path: str | Path) -> dict[str, Any]:
         tags.setdefault("composer", None)
         tags.setdefault("raw_id3", {})
         return tags
-    return extract_mp3_tags(path)
+    return extract_flac_tags(path)
 
 
 def _default_mp3_output_root() -> str:
@@ -109,7 +107,7 @@ def _build_import_batch_records(
     for item in found:
         tags = _extract_tags(item.path)
         identity = compute_file_identity(item.path, item.relative_path)
-        probe = probe_mp3(item.path)
+        probe = probe_flac(item.path)
         canonical = classify_genre(tags.get("genre") or tags.get("subgenre"))
         issue_codes = sorted(
             set(
@@ -296,28 +294,6 @@ def _load(args: argparse.Namespace) -> int:
     return 0
 
 
-def _import_analysis(args: argparse.Namespace) -> int:
-    records = build_analysis_import_records(args.input)
-    run_id = str(records[0]["run_id"])
-    receipt_path = receipt_path_for_run(args.receipt_dir, run_id)
-    write_receipt(receipt_path, records)
-
-    if args.no_upload or args.dry_run:
-        print(f"Wrote receipt to {receipt_path}")
-        return 0
-
-    try:
-        client = TaghagDbClient(read_database_config())
-        result = client.upload_analysis_events(records)
-        append_receipt(receipt_path, [event("upload_result", run_id=run_id, status="uploaded", result=result)])
-        print(f"Uploaded analysis import {run_id}; receipt: {receipt_path}")
-        return 0
-    except Exception as exc:
-        append_receipt(receipt_path, [event("upload_result", run_id=run_id, status="failed", error=str(exc))])
-        print(f"Upload failed after receipt was written: {exc}")
-        return 1
-
-
 def _transcode(args: argparse.Namespace) -> int:
     output_root = Path(args.output).expanduser().resolve()
     failure_ledger = output_root / "reports" / "transcode_failures.jsonl"
@@ -404,7 +380,7 @@ def _explicit_mp3_path(value: str | Path) -> Path:
     path = Path(value).expanduser().resolve()
     if not path.is_file():
         raise FileNotFoundError(path)
-    if path.suffix.lower() != ".mp3":
+    if path.suffix.lower() != ".flac":
         raise ValueError(f"not an MP3 file: {path}")
     return path
 
@@ -434,13 +410,13 @@ def _dump_tags(args: argparse.Namespace) -> int:
         output.parent.mkdir(parents=True, exist_ok=True)
         with output.open("w", encoding="utf-8") as handle:
             for path in paths:
-                record = {"path": str(path), "tags": dump_mp3_tags(path)}
+                record = {"path": str(path), "tags": dump_flac_tags(path)}
                 handle.write(json.dumps(record, sort_keys=True) + "\n")
     except (OSError, ValueError) as exc:
         print(f"Tag dump failed: {exc}")
         return 1
 
-    print(f"Wrote {len(paths)} MP3 tag record(s) to {output}")
+    print(f"Wrote {len(paths)} FLAC tag record(s) to {output}")
     return 0
 
 
@@ -467,7 +443,7 @@ def _write_tags(args: argparse.Namespace) -> int:
     try:
         plan = _load_write_plan(args.plan)
         results = [
-            apply_mp3_tag_updates(
+            apply_flac_tag_updates(
                 path,
                 updates,
                 execute=args.execute,
@@ -654,45 +630,15 @@ def _extract_dj_slice_command(args: argparse.Namespace) -> int:
     return 0
 
 
-def _analyze_apple(args: argparse.Namespace) -> int:
-    try:
-        client = TaghagDbClient(read_database_config())
-    except Exception as exc:
-        print(f"Failed to connect to database: {exc}")
-        return 1
 
-    root_path = Path(args.root).expanduser().resolve()
-    found, _ = discover_audio_files(root_path)
-    flac_paths = [Path(item.path) for item in found if Path(item.path).suffix.lower() == ".flac"]
-    
-    if not flac_paths:
-        print(f"No FLAC files found in {root_path}")
-        return 0
-        
-    print(f"Discovered {len(flac_paths)} FLAC files to analyze.")
-    try:
-        summary = run_apple_music_ingestion(client, client._config.owner_user_id, flac_paths)
-    except Exception as exc:
-        print(f"Apple Music Ingestion failed: {exc}")
-        return 1
-        
-    print("\n--- Summary ---")
-    print(f"Processed: {summary['processed']}")
-    print(f"Eligible: {summary['eligible']}")
-    print(f"Rejected (Duration): {summary['rejected_duration']}")
-    print(f"Rejected (BPM): {summary['rejected_bpm']}")
-    print(f"Rejected (Structure): {summary['rejected_structure']}")
-    print(f"Rejected (Ambient): {summary['rejected_ambient']}")
-    
-    return 0
 
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="taghag-import")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
-    import_batch = subparsers.add_parser("import-batch", help="Scan local MP3 files and upload metadata")
-    import_batch.add_argument("--root", required=True, help="Path to the local MP3 batch root")
+    import_batch = subparsers.add_parser("import-batch", help="Scan local FLAC files and upload metadata")
+    import_batch.add_argument("--root", required=True, help="Path to the local FLAC batch root")
     import_batch.add_argument("--run-name", help="Optional human-readable import run name")
     import_batch.add_argument("--dry-run", action="store_true", help="Write receipt only and skip upload")
     import_batch.add_argument("--no-upload", action="store_true", help="Write receipt only and skip upload")
@@ -715,13 +661,6 @@ def build_parser() -> argparse.ArgumentParser:
     load = subparsers.add_parser("load", help="Compatibility wrapper: upload a JSONL receipt")
     load.add_argument("--receipt", required=True, help="Path to a JSONL receipt file")
     load.set_defaults(func=_load)
-
-    import_analysis = subparsers.add_parser("import-analysis", help="Import local Essentia metadata sidecar")
-    import_analysis.add_argument("--input", required=True, help="Path to essentia-lexicon-sidecar/2 JSON")
-    import_analysis.add_argument("--receipt-dir", default="artifacts/analysis_imports", help="Receipt root directory")
-    import_analysis.add_argument("--dry-run", action="store_true", help="Write receipt only and skip upload")
-    import_analysis.add_argument("--no-upload", action="store_true", help="Write receipt only and skip upload")
-    import_analysis.set_defaults(func=_import_analysis)
 
     transcode = subparsers.add_parser(
         "transcode",
@@ -771,8 +710,8 @@ def build_parser() -> argparse.ArgumentParser:
     stage.set_defaults(func=_stage)
 
     audit_mp3 = subparsers.add_parser(
-        "audit-mp3",
-        help="Audit a local MP3 tree and write metadata-only reports",
+        "audit-flac",
+        help="Audit a local FLAC tree and write metadata-only reports",
     )
     audit_mp3.add_argument("--root", required=True, help="Local MP3 root to audit")
     audit_mp3.add_argument(
@@ -887,12 +826,13 @@ def build_parser() -> argparse.ArgumentParser:
 
     extract_dj_slice_parser.set_defaults(func=_extract_dj_slice_command)
 
-    analyze_apple_parser = subparsers.add_parser(
-        "analyze-apple",
-        help="Run local WWDC26 MusicUnderstanding ingestion on FLACs",
+    analyze_unified = subparsers.add_parser(
+        "analyze",
+        help="Run deterministic Apple Music Understanding analysis",
     )
-    analyze_apple_parser.add_argument("--root", required=True, help="Path to the FLAC library root")
-    analyze_apple_parser.set_defaults(func=_analyze_apple)
+    analyze_unified.add_argument("--target", required=True, type=Path, help="Path to a FLAC file or directory")
+    analyze_unified.add_argument("--dry-run", action="store_true", help="Run the analyzer on one FLAC without mutating DB")
+    analyze_unified.set_defaults(func=_analyze_unified)
 
     # --- Taghag Intelligence Extensions ---
     
@@ -910,26 +850,9 @@ def build_parser() -> argparse.ArgumentParser:
     provider_smoke.add_argument("--track-id", default="4862171", help="Sample Beatport track ID to check")
     provider_smoke.set_defaults(func=_provider_smoke)
 
-    # 4. Essentia Tagger Sub-interface
-    essentia = subparsers.add_parser("essentia", help="Essentia integration commands")
-    essentia_sub = essentia.add_subparsers(dest="subcommand", required=True)
-    
-    ess_analyze = essentia_sub.add_parser("analyze", help="Execute external Essentia analyzer")
-    ess_analyze.add_argument("--input", required=True, help="Input audio file or directory path")
-    ess_analyze.add_argument("--out", required=True, help="Output directory or file path for the sidecar")
-    ess_analyze.add_argument("--dry-run", action="store_true", default=True, help="Run in non-mutating candidate dry-run mode")
-    
-    ess_ingest = essentia_sub.add_parser("ingest", help="Ingest Essentia sidecar to database")
-    ess_ingest.add_argument("--input", required=True, help="Path to sidecar JSON file")
-    
-    essentia.set_defaults(func=_essentia_command)
-
     # 5. Cuecifer Sub-interface
     cuecifer = subparsers.add_parser("cuecifer", help="Cuecifer classification and crate commands")
     cuecifer_sub = cuecifer.add_subparsers(dest="subcommand", required=True)
-    
-    mag_recompute = cuecifer_sub.add_parser("recompute", help="Recompute L2 normalized 7D vectors from raw analysis")
-    mag_recompute.set_defaults(func=_cuecifer_recompute)
     
     mag_similar = cuecifer_sub.add_parser("similar", help="Find similar tracks in database")
     mag_similar.add_argument("--track-id", required=True, help="Database audio_file ID")
@@ -948,16 +871,6 @@ def build_parser() -> argparse.ArgumentParser:
     mag_sync_id3.add_argument("--music-dir", required=True, help="Base music library directory")
     mag_sync_id3.add_argument("--execute", action="store_true", help="Apply tag modifications to MP3 files")
     
-    mag_analyze_file = cuecifer_sub.add_parser("analyze-file", help="Run local WWDC26 MusicUnderstanding ingestion on a single FLAC file")
-    mag_analyze_file.add_argument("--file", required=True, type=Path, help="Path to the FLAC file")
-    mag_analyze_file.add_argument("--dry-run", action="store_true", help="Run analyzer without saving to DB")
-    mag_analyze_file.set_defaults(func=_cuecifer_analyze_file)
-    
-    cuecifer_analyze_setlist = cuecifer_sub.add_parser("analyze-setlist", help="Analyze a DJ setlist using MLX-LM")
-    cuecifer_analyze_setlist.add_argument("--file", required=True, type=Path, help="Path to JSON setlist extracted from Cuecifer")
-    cuecifer_analyze_setlist.add_argument("--model", default="mlx-community/Qwen2.5-32B-Instruct-4bit", help="HuggingFace model ID")
-    cuecifer_analyze_setlist.set_defaults(func=_cuecifer_analyze_setlist)
-
     cuecifer.set_defaults(func=_cuecifer_command)
 
     # 6. Cue Sub-interface
@@ -1090,145 +1003,51 @@ def _provider_smoke(args: argparse.Namespace) -> int:
     return 0
 
 
-def _essentia_command(args: argparse.Namespace) -> int:
-    adapter = EssentiaAdapter()
-    if args.subcommand == "analyze":
-        code, log = adapter.run_analysis(args.input, args.out, dry_run=args.dry_run)
-        print(f"Analysis exited with code: {code}")
-        print(f"Run Log:\n{log}")
-        return code
-    elif args.subcommand == "ingest":
-        client = TaghagDbClient(read_database_config())
-        res = adapter.ingest_sidecar(client, args.input)
-        print(f"Ingested sidecar: {res}")
-        return 0
-    return 1
-
-
-def _cuecifer_recompute(args: argparse.Namespace) -> int:
-    client = TaghagDbClient(read_database_config())
-    owner_id = client._config.owner_user_id
-    
-    # Fetch all tracks from track_analysis
-    analyses = client._get_postgrest_rows(
-        "track_analysis",
-        {"owner_user_id": f"eq.{owner_id}"}
-    )
-    
-    # Fetch all dj_tags for BPM
-    dj_tags = {
-        t["audio_file_id"]: t 
-        for t in client._get_postgrest_rows(
-            "dj_tag",
-            {"owner_user_id": f"eq.{owner_id}"}
-        )
-    }
-
-    embeddings = []
-    
-    for row in analyses:
-        file_id = row["audio_file_id"]
-        tag = dj_tags.get(file_id, {})
-        bpm = float(tag.get("bpm") or 120.0)
-        energy = float(tag.get("energy") or 5)
-        
-        # Calculate log-normalized 7D vector
-        vec = compute_sonic_vector(
-            happy=float(row["happy"]),
-            aggressive=float(row["aggressive"]),
-            relaxed=float(row["relaxed"]),
-            party=float(row["party"]),
-            danceability=float(row["danceability"]),
-            bpm=bpm,
-            energy=energy
-        )
-        
-        # Classify producer vibes & complexity tags
-        vibes = classify_producer_vibes(
-            happy=float(row["happy"]),
-            aggressive=float(row["aggressive"]),
-            relaxed=float(row["relaxed"]),
-            party=float(row["party"]),
-            danceability=float(row["danceability"])
-        )
-        
-        embeddings.append({
-            "owner_user_id": owner_id,
-            "audio_file_id": file_id,
-            "vector_schema": "essentia-7d-v1",
-            "embedding": vec,
-            "producer_vibes_json": vibes,
-            "computed_at": datetime.now(UTC).isoformat()
-        })
-        
-    if embeddings:
-        client.upsert_track_embedding(embeddings)
-        print(f"Recomputed and upserted {len(embeddings)} track embeddings to Postgres.")
-        return 0
-        
-    print("No track analysis records found to recompute.")
-    return 0
-
-
-def _cuecifer_analyze_file(args: argparse.Namespace) -> int:
-    from taghag_import.apple_music_adapter import run_apple_music_ingestion
-    client = TaghagDbClient(read_database_config())
-    owner_id = os.environ.get("TAGHAG_OWNER_USER_ID", "d4c61173-8432-432f-b238-9bd72c7285e3")
-    
-    flac_path = args.file
-    if not flac_path.is_file():
-        print(f"Error: File not found {flac_path}")
+def _analyze_unified(args: argparse.Namespace) -> int:
+    target_path = Path(args.target).expanduser().resolve()
+    if not target_path.exists():
+        print(f"Error: Target path not found: {target_path}")
         return 1
 
-    print(f"Running Cuecifer on {flac_path.name}")
+    print("\n--- Running Apple Music Understanding Analysis ---")
+    from taghag_import.apple_music_adapter import SWIFT_CLI_PATH, run_apple_music_ingestion
+    import subprocess
+
+    if target_path.is_dir():
+        found, _ = discover_audio_files(target_path)
+        flac_paths = [Path(item.path) for item in found if Path(item.path).suffix.lower() == ".flac"]
+    elif target_path.is_file() and target_path.suffix.lower() == ".flac":
+        flac_paths = [target_path]
+    else:
+        flac_paths = []
+
+    if not flac_paths:
+        print(f"No FLAC files found in {target_path}.")
+        return 1
+
+    print(f"Found {len(flac_paths)} FLAC files to analyze.")
     try:
         if args.dry_run:
-            print("Dry run requested, skipping DB ingestion. Running analyzer...")
-            import subprocess
-            from taghag_import.apple_music_adapter import SWIFT_CLI_PATH
+            print("Dry run requested, skipping DB ingestion. Running analyzer on first file only...")
             result = subprocess.run(
-                [str(SWIFT_CLI_PATH), str(flac_path)],
+                [str(SWIFT_CLI_PATH), str(flac_paths[0])],
                 capture_output=True,
                 text=True,
-                check=True
+                check=True,
             )
             print(result.stdout)
             return 0
-        else:
-            stats = run_apple_music_ingestion(client, owner_id, [flac_path])
-            print(f"Ingestion complete. Status: {stats}")
-            return 0
-    except Exception as exc:
-        print(f"Failed to analyze file: {exc}")
-        return 1
 
-def _cuecifer_analyze_setlist(args: argparse.Namespace) -> int:
-    import json
-    from taghag_import.mlx_pipeline import extract_reduced_metadata, analyze_setlist_with_mlx
-    
-    file_path = args.file
-    if not file_path.is_file():
-        print(f"Error: File not found {file_path}")
-        return 1
-
-    try:
-        with open(file_path, "r", encoding="utf-8") as f:
-            raw_data = json.load(f)
-        
-        # If it's a list, reduce each item
-        if isinstance(raw_data, list):
-            reduced = [extract_reduced_metadata(item) for item in raw_data if item]
-        else:
-            reduced = [extract_reduced_metadata(raw_data)]
-            
-        print(f"Loaded {len(reduced)} tracks. Running MLX analysis...")
-        result = analyze_setlist_with_mlx(reduced, model_id=args.model)
-        if result:
-            print("\nResponse:\n" + result)
-            return 0
-        return 1
+        client = TaghagDbClient(read_database_config())
+        owner_id = os.environ.get("TAGHAG_OWNER_USER_ID", client._config.owner_user_id)
+        if not owner_id:
+            print("Error: TAGHAG_OWNER_USER_ID is required")
+            return 1
+        stats = run_apple_music_ingestion(client, owner_id, flac_paths)
+        print(f"Apple ingestion complete. Status: {stats}")
+        return 0
     except Exception as exc:
-        print(f"Failed to analyze setlist: {exc}")
+        print(f"Apple analysis failed: {exc}")
         return 1
 
 def _cuecifer_command(args: argparse.Namespace) -> int:
@@ -1344,4 +1163,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

@@ -12,7 +12,6 @@ from psycopg2.extras import RealDictCursor
 
 from .config import read_database_config
 from .db_client import TaghagDbClient
-from .sonic_discovery import compute_sonic_vector
 
 
 def camelot_distance(k1: str, k2: str) -> float:

@@ -157,7 +157,7 @@ def _build_legacy_files_db(path: Path) -> Path:
             """,
             [
                 _files_row(
-                    path="/music/dup-a.mp3",
+                    path="/music/dup-a.flac",
                     mtime=1.0,
                     size=12345,
                     checksum="checksum-a",
@@ -192,7 +192,7 @@ def _build_legacy_files_db(path: Path) -> Path:
                     canonical_catalog_number="CAT-A",
                 ),
                 _files_row(
-                    path="/music/dup-b.mp3",
+                    path="/music/dup-b.flac",
                     mtime=2.0,
                     size=23456,
                     checksum="checksum-b",
@@ -226,7 +226,7 @@ def _build_legacy_files_db(path: Path) -> Path:
                     canonical_catalog_number="CAT-A",
                 ),
                 _files_row(
-                    path="/music/fallback.mp3",
+                    path="/music/fallback.flac",
                     mtime=3.0,
                     size=34567,
                     sha256="sha256-fallback",
@@ -243,7 +243,7 @@ def _build_legacy_files_db(path: Path) -> Path:
                     ),
                 ),
                 _files_row(
-                    path="/music/skipped.mp3",
+                    path="/music/skipped.flac",
                     mtime=4.0,
                     size=45678,
                     duration=200.0,

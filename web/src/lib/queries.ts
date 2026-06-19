@@ -3,7 +3,7 @@ import type { Database, Json } from "./database.types";
 
 type Tables = Database["public"]["Tables"];
 export type ImportRun = Tables["import_run"]["Row"];
-export type Mp3File = Tables["mp3_file"]["Row"];
+export type AudioFile = Tables["audio_file"]["Row"];
 export type DjTag = Tables["dj_tag"]["Row"];
 export type QualityCheck = Tables["quality_check"]["Row"];
 export type TagEvidence = Tables["tag_evidence"]["Row"];
@@ -19,14 +19,14 @@ export type LibraryFilters = {
 };
 
 export type LibraryTrack = {
-  file: Mp3File;
+  file: AudioFile;
   tag: DjTag | null;
   latestQuality: QualityCheck | null;
   latestEvidence: TagEvidence | null;
 };
 
 export type DashboardCounts = {
-  totalMp3s: number;
+  totalFlacs: number;
   missingArtistTitle: number;
   missingBpmKey: number;
   missingGenreSubgenre: number;
@@ -53,7 +53,7 @@ export async function listImportRuns(): Promise<ImportRun[]> {
 export async function listLibraryTracks(filters: LibraryFilters = {}): Promise<LibraryTrack[]> {
   const supabase = getSupabaseClient();
   const { data: files, error: fileError } = await supabase
-    .from("mp3_file")
+    .from("audio_file")
     .select("*")
     .order("filename", { ascending: true })
     .limit(200);
@@ -64,30 +64,30 @@ export async function listLibraryTracks(filters: LibraryFilters = {}): Promise<L
 
   const [{ data: tags, error: tagError }, { data: quality, error: qualityError }, { data: evidence, error: evidenceError }] =
     await Promise.all([
-      supabase.from("dj_tag").select("*").in("mp3_file_id", fileIds),
+      supabase.from("dj_tag").select("*").in("audio_file_id", fileIds),
       supabase
         .from("quality_check")
         .select("*")
-        .in("mp3_file_id", fileIds)
+        .in("audio_file_id", fileIds)
         .order("checked_at", { ascending: false }),
       supabase
         .from("tag_evidence")
         .select("*")
-        .in("mp3_file_id", fileIds)
+        .in("audio_file_id", fileIds)
         .order("fetched_at", { ascending: false }),
     ]);
   if (tagError) throw tagError;
   if (qualityError) throw qualityError;
   if (evidenceError) throw evidenceError;
 
-  const tagsByFile = new Map((tags ?? []).map((tag) => [tag.mp3_file_id, tag]));
+  const tagsByFile = new Map((tags ?? []).map((tag) => [tag.audio_file_id, tag]));
   const qualityByFile = new Map<string, QualityCheck>();
   for (const row of quality ?? []) {
-    if (!qualityByFile.has(row.mp3_file_id)) qualityByFile.set(row.mp3_file_id, row);
+    if (!qualityByFile.has(row.audio_file_id)) qualityByFile.set(row.audio_file_id, row);
   }
   const evidenceByFile = new Map<string, TagEvidence>();
   for (const row of evidence ?? []) {
-    if (!evidenceByFile.has(row.mp3_file_id)) evidenceByFile.set(row.mp3_file_id, row);
+    if (!evidenceByFile.has(row.audio_file_id)) evidenceByFile.set(row.audio_file_id, row);
   }
 
   return (files ?? [])
@@ -136,7 +136,7 @@ export async function getDashboardCounts(): Promise<DashboardCounts> {
   }
 
   return {
-    totalMp3s: tracks.length,
+    totalFlacs: tracks.length,
     missingArtistTitle: tracks.filter((track) => !track.tag?.artist || !track.tag?.title).length,
     missingBpmKey: tracks.filter((track) => !track.tag?.bpm || !track.tag?.musical_key).length,
     missingGenreSubgenre: tracks.filter(

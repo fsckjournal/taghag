@@ -4,7 +4,7 @@ from pathlib import Path
 
 from mutagen.id3 import APIC, COMM, ID3, TBPM, TDRC, TIT2, TPE1, TXXX
 
-from taghag_import.tags import apply_mp3_tag_updates, dump_mp3_tags, extract_mp3_tags
+from taghag_import.tags import apply_flac_tag_updates, dump_flac_tags, extract_flac_tags
 
 
 def _tagged_mp3(path: Path) -> None:
@@ -18,11 +18,11 @@ def _tagged_mp3(path: Path) -> None:
     tags.save(path)
 
 
-def test_dump_mp3_tags_summarizes_binary_frames(tmp_path: Path) -> None:
-    mp3 = tmp_path / "track.mp3"
+def test_dump_flac_tags_summarizes_binary_frames(tmp_path: Path) -> None:
+    mp3 = tmp_path / "track.flac"
     _tagged_mp3(mp3)
 
-    dumped = dump_mp3_tags(mp3)
+    dumped = dump_flac_tags(mp3)
 
     assert dumped["TIT2"] == ["Original Title"]
     assert dumped["TXXX:CUSTOM_KEEP"] == ["keep me"]
@@ -30,12 +30,12 @@ def test_dump_mp3_tags_summarizes_binary_frames(tmp_path: Path) -> None:
     assert b"jpeg" not in repr(dumped).encode("utf-8")
 
 
-def test_apply_mp3_tag_updates_is_dry_run_by_default(tmp_path: Path) -> None:
-    mp3 = tmp_path / "track.mp3"
+def test_apply_flac_tag_updates_is_dry_run_by_default(tmp_path: Path) -> None:
+    mp3 = tmp_path / "track.flac"
     _tagged_mp3(mp3)
     before = mp3.read_bytes()
 
-    result = apply_mp3_tag_updates(
+    result = apply_flac_tag_updates(
         mp3,
         {"bpm": "124", "label": "Dry Run Records"},
     )
@@ -49,11 +49,11 @@ def test_apply_mp3_tag_updates_is_dry_run_by_default(tmp_path: Path) -> None:
     assert "TPUB" not in tags
 
 
-def test_apply_mp3_tag_updates_preserves_existing_and_unknown_frames(tmp_path: Path) -> None:
-    mp3 = tmp_path / "track.mp3"
+def test_apply_flac_tag_updates_preserves_existing_and_unknown_frames(tmp_path: Path) -> None:
+    mp3 = tmp_path / "track.flac"
     _tagged_mp3(mp3)
 
-    result = apply_mp3_tag_updates(
+    result = apply_flac_tag_updates(
         mp3,
         {
             "title": "Replacement Title",
@@ -78,14 +78,14 @@ def test_apply_mp3_tag_updates_preserves_existing_and_unknown_frames(tmp_path: P
     assert tags["APIC:Cover"].data == b"jpeg"
 
 
-def test_apply_mp3_tag_updates_force_overwrites_only_requested_field(tmp_path: Path) -> None:
-    mp3 = tmp_path / "track.mp3"
+def test_apply_flac_tag_updates_force_overwrites_only_requested_field(tmp_path: Path) -> None:
+    mp3 = tmp_path / "track.flac"
     _tagged_mp3(mp3)
     tags = ID3(mp3)
     tags.add(TBPM(encoding=3, text=["120"]))
     tags.save(mp3)
 
-    result = apply_mp3_tag_updates(
+    result = apply_flac_tag_updates(
         mp3,
         {"title": "Forced Title"},
         execute=True,
@@ -100,16 +100,16 @@ def test_apply_mp3_tag_updates_force_overwrites_only_requested_field(tmp_path: P
     assert tags.getall("COMM")[0].text == ["8 Energy"]
 
 
-def test_extract_mp3_tags_derives_release_date_and_year_from_date_frame(
+def test_extract_flac_tags_derives_release_date_and_year_from_date_frame(
     tmp_path: Path,
 ) -> None:
-    mp3 = tmp_path / "track.mp3"
+    mp3 = tmp_path / "track.flac"
     mp3.write_bytes(b"")
     tags = ID3()
     tags.add(TDRC(encoding=3, text=["2024-05-03"]))
     tags.save(mp3)
 
-    extracted = extract_mp3_tags(mp3)
+    extracted = extract_flac_tags(mp3)
 
     assert extracted["release_date"] == "2024-05-03"
     assert extracted["year"] == "2024"

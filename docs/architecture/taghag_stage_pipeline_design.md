@@ -3,7 +3,7 @@
 ## Purpose
 
 Add one Taghag-owned command that accepts a local FLAC file or directory and
-processes it into a validated, deduplicated, local MP3 batch with metadata
+processes it into a validated, deduplicated, local FLAC batch with metadata
 receipts. The command must not import Tagslut code, access the Tagslut database,
 upload audio, or modify source FLAC files.
 
@@ -19,7 +19,7 @@ The output root contains:
 
 ```text
 <output>/
-  mp3/
+  flac/
   receipts/
     stage.jsonl
   reports/
@@ -29,7 +29,7 @@ The output root contains:
 ```
 
 `--dry-run` performs discovery, validation, fingerprinting, duplicate planning,
-and reporting without creating the output tree or transcoding audio.
+and reporting without creating the output tree or staging audio.
 
 ## Safety Boundary
 
@@ -39,7 +39,7 @@ and reporting without creating the output tree or transcoding audio.
 - No Supabase connection is made by `stage`.
 - Audio remains on local disks.
 - Dedupe is report-only at the source layer.
-- Exact audio duplicates are blocked from admission and transcoding, but remain
+- Exact audio duplicates are blocked from admission and staging, but remain
   untouched on disk.
 - Release, album, and compilation context never permits duplicate audio.
 - Metadata similarity never causes an automatic skip.
@@ -63,7 +63,7 @@ For each FLAC:
   track number, compilation, and comments.
 - Record validation failures in the receipt.
 
-Invalid FLACs are never transcoded. One invalid file does not stop unrelated
+Invalid FLACs are never staged. One invalid file does not stop unrelated
 valid files.
 
 ### 3. Fingerprint And Dedupe
@@ -79,13 +79,13 @@ their tags, artwork, release folder, or FLAC container bytes differ.
 
 Within the input batch, select the lexicographically first path as the
 deterministic keeper. Other members are reported as blocked audio duplicates
-and are not transcoded.
+and are not staged.
 
 Before admission, compare each keeper fingerprint against the local source-PCM
-fingerprint index written beside previously admitted Taghag MP3s. A decoded
-lossy MP3 cannot reproduce the source PCM hash, so the index preserves the
-source fingerprint associated with each validated MP3 path. If the audio
-already exists there, block the new FLAC instead of creating another MP3.
+fingerprint index written beside previously admitted Taghag FLACs. A decoded
+FLAC cannot reproduce the source PCM hash, so the index preserves the
+source fingerprint associated with each validated FLAC path. If the audio
+already exists there, block the new FLAC instead of creating another FLAC.
 Compilation membership and release context do not override this rule. This
 comparison is local and does not require Supabase.
 
@@ -98,32 +98,25 @@ These are review candidates because releases, edits, masters, and mixes may
 legitimately share metadata. They are not duplicates unless their decoded-audio
 fingerprints match.
 
-### 4. Transcode
+### 4. Stage Output
 
-Transcode each valid exact-hash keeper to a mirrored path beneath
-`<output>/mp3/`.
+Copy each valid exact-hash keeper to a mirrored path beneath
+`<output>/flac/`.
 
-Encoding contract:
+Copying contract:
 
-- MP3 using `libmp3lame`.
-- 320 kbps.
-- First audio stream only.
-- Source metadata copied.
-- ID3v2.3 output.
-- Existing non-empty destination MP3s are skipped.
+- FLAC files are copied verbatim.
+- Existing non-empty destination FLACs are skipped.
 - Partial or failed output files are removed.
 
-The stage command reuses the existing Taghag transcode module rather than
-introducing another FFmpeg implementation.
+### 5. Validate Output
 
-### 5. Validate MP3
+Use Taghag's existing validation behavior to verify:
 
-Use Taghag's existing `probe_mp3` behavior to verify:
-
-- MP3 codec.
-- Decode succeeds.
+- FLAC codec.
+- Decode succeeds (`flac -t`).
 - Duration is present.
-- Bitrate is present and acceptable.
+- Bit depth and sample rate are acceptable.
 
 Failed outputs remain reported and are excluded from metadata receipt events.
 
@@ -138,10 +131,10 @@ The stage receipt contains:
 
 - Stage start and tool versions.
 - FLAC discovery and validation records.
-- Audio-duplicate block decisions, including the keeper or existing Taghag MP3.
+- Audio-duplicate block decisions, including the keeper or existing Taghag FLAC.
 - Metadata-only duplicate candidates.
 - Transcode result per keeper.
-- MP3 metadata and quality events.
+- FLAC metadata and quality events.
 - Final counts and paths to generated reports.
 
 The receipt must not contain credentials or audio data.
@@ -149,7 +142,7 @@ The receipt must not contain credentials or audio data.
 ## Exit Behavior
 
 Return success when every non-duplicate eligible FLAC is either successfully
-transcoded or already has its valid destination MP3. Blocked audio duplicates
+staged or already has its valid destination FLAC. Blocked audio duplicates
 are an expected result and are counted separately, not treated as processing
 failures.
 
@@ -157,7 +150,7 @@ Return failure when:
 
 - The source does not exist or is not a FLAC/file directory input.
 - Required binaries are unavailable.
-- Any eligible keeper fails FLAC validation, transcoding, or MP3 validation.
+- Any eligible keeper fails FLAC validation, staging, or FLAC validation.
 
 Reports and receipts should still be written for partial failures unless
 `--dry-run` is active.
@@ -170,7 +163,7 @@ Verbose output is the default. Print one decision for every discovered FLAC:
 - `audio-duplicate-blocked`
 - `metadata-candidate`
 - `existing`
-- `transcode`
+- `stage`
 - `validated`
 - `failed`
 
@@ -186,15 +179,15 @@ Tests must cover:
 - Exact-file duplicate keeper selection.
 - Decoded-audio duplicates with different tags or artwork are blocked.
 - Compilation folders do not permit duplicate audio.
-- Audio already present in the Taghag MP3 corpus is blocked.
+- Audio already present in the Taghag FLAC corpus is blocked.
 - Same ISRC with different checksums remains a review candidate.
 - Same artist/title with different checksums remains a review candidate.
 - Dry run creates no output directories.
-- Blocked duplicate remains on disk and is not transcoded.
-- Mirrored 320 kbps transcode command.
-- Existing MP3 resume behavior.
-- Failed partial MP3 cleanup.
-- MP3 validation before receipt inclusion.
+- Blocked duplicate remains on disk and is not staged.
+- Mirrored 320 kbps stage command.
+- Existing FLAC resume behavior.
+- Failed partial FLAC cleanup.
+- FLAC validation before receipt inclusion.
 - Receipt contains metadata only.
 - No database configuration or client is initialized.
 

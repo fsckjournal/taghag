@@ -42,7 +42,7 @@ def discover_audio_files(root: str | Path) -> tuple[list[DiscoveryRecord], list[
         rel = str(path.relative_to(root_path))
         ext = path.suffix.lower()
 
-        if ext in (".mp3", ".flac"):
+        if ext in (".flac", ".flac"):
             found.append(
                 DiscoveryRecord(
                     path=str(path),

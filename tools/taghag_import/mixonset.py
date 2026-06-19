@@ -116,7 +116,7 @@ class MixonsetImporter:
             db_by_exact_path[p] = f
             
             # Normalize path delimiters for cross-referencing
-            norm_p = p.replace("/mp3-p/", "/mp3/").replace("/mp3-2/", "/mp3/")
+            norm_p = p.replace("/flac-p/", "/flac/").replace("/flac-2/", "/flac/")
             db_by_exact_path[norm_p] = f
             
             clean_p = self.clean_name(norm_p)
@@ -166,7 +166,7 @@ class MixonsetImporter:
                 continue
 
             raw_path = unquote(asset_url[len("file://"):])
-            norm_path = raw_path.replace("/mp3-p/", "/mp3/").replace("/mp3-2/", "/mp3/")
+            norm_path = raw_path.replace("/flac-p/", "/flac/").replace("/flac-2/", "/flac/")
 
             matched = None
             if norm_path in db_by_exact_path:

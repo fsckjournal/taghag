@@ -23,7 +23,7 @@ export type Database = {
         created_at: string;
         updated_at: string;
       }>;
-      mp3_file: Table<{
+      audio_file: Table<{
         id: string;
         owner_user_id: string;
         file_key: string;
@@ -33,7 +33,7 @@ export type Database = {
         mtime_ns: number | null;
         duration_s: number | null;
         bitrate_kbps: number | null;
-        codec: "mp3";
+        codec: "flac" | "mp3";
         checksum_sha256: string | null;
         checksum_prefix: string | null;
         identity_source: string | null;
@@ -43,11 +43,11 @@ export type Database = {
         created_at: string;
         updated_at: string;
       }>;
-      mp3_observation: Table<{
+      audio_observation: Table<{
         id: string;
         owner_user_id: string;
         import_run_id: string;
-        mp3_file_id: string | null;
+        audio_file_id: string | null;
         observed_path: string;
         observed_size_bytes: number | null;
         observed_mtime_ns: number | null;
@@ -60,7 +60,7 @@ export type Database = {
       dj_tag: Table<{
         id: string;
         owner_user_id: string;
-        mp3_file_id: string;
+        audio_file_id: string;
         artist: string | null;
         title: string | null;
         album: string | null;
@@ -86,7 +86,7 @@ export type Database = {
       tag_evidence: Table<{
         id: string;
         owner_user_id: string;
-        mp3_file_id: string;
+        audio_file_id: string;
         provider: string;
         lookup_type: string;
         lookup_key: string;
@@ -104,7 +104,7 @@ export type Database = {
         id: string;
         owner_user_id: string;
         import_run_id: string | null;
-        mp3_file_id: string;
+        audio_file_id: string;
         decode_ok: boolean | null;
         duration_ok: boolean | null;
         bitrate_ok: boolean | null;
@@ -130,7 +130,7 @@ export type Database = {
         id: string;
         owner_user_id: string;
         crate_id: string;
-        mp3_file_id: string;
+        audio_file_id: string;
         position: number;
         notes: string | null;
         created_at: string;

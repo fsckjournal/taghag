@@ -1,94 +1,65 @@
 from __future__ import annotations
 
-import json
-from pathlib import Path
-
-import pytest
-
-from taghag_import.analysis_contract import load_analysis_sidecar
+from taghag_import.apple_derived_features import compute_derived_features
 
 
-def _write_sidecar(path: Path, *, schema: str = "essentia-lexicon-sidecar/2") -> None:
-    path.write_text(
-        json.dumps(
-            {
-                "schema": schema,
-                "model_profile": "cuecifer-v1",
-                "models": {"genre": "discogs-effnet", "mood": "mtg-jamendo"},
-                "tracks": {
-                    "/music/track.mp3": {
-                        "file_key": "sha256:abc",
-                        "genres": [{"label": "Electronic - House", "confidence": 0.8}],
-                        "attributes": {
-                            "happy": 0.4,
-                            "aggressive": 0.2,
-                            "relaxed": 0.3,
-                            "party": 0.9,
-                            "danceability": 0.95,
-                        },
-                    }
-                },
+def _time(value: int, timescale: int = 1_000) -> dict[str, int]:
+    return {"value": value, "timescale": timescale}
+
+
+def _range(start_ms: int, duration_ms: int) -> dict[str, dict[str, dict[str, int]]]:
+    return {"range": {"start": _time(start_ms), "duration": _time(duration_ms)}}
+
+
+def test_compute_derived_features_preserves_apple_phase_four_scalars() -> None:
+    raw = {
+        "rhythm": {
+            "beatsPerMinute": 124.0,
+            "beats": [_time(0), _time(500)],
+            "bars": [_time(0)],
+        },
+        "key": {
+            "ranges": [
+                {"value": {"tonic": 0, "mode": 0}},
+                {"value": {"tonic": 7, "mode": 0}},
+            ]
+        },
+        "loudness": {
+            "integrated": {"value": -10.0},
+            "peak": {"value": -1.0},
+            "shortTerm": [{"value": -12.0}, {"value": -8.0}],
+        },
+        "pace": {"ranges": [{"value": 0.4}, {"value": 0.8}, {"value": 1.0}]},
+        "structure": {
+            "sections": [_range(0, 16_000), _range(240_000, 32_000)],
+            "segments": [_range(0, 8_000)],
+            "phrases": [_range(0, 32_000), _range(32_000, 32_000)],
+        },
+        "instrumentActivity": {
+            "activity": {
+                "vocal": [{"value": 0.0}, {"value": 0.2}],
+                "drum": [{"value": 0.9}, {"value": 0.8}],
+                "bass": [{"value": 0.3}, {"value": 0.5}],
             }
-        ),
-        encoding="utf-8",
-    )
+        },
+    }
 
+    features = compute_derived_features(raw, reference_bpm=125.0)
 
-def test_load_analysis_sidecar_normalizes_metadata_only_rows(tmp_path: Path) -> None:
-    sidecar = tmp_path / "sidecar.json"
-    _write_sidecar(sidecar)
-
-    artifact = load_analysis_sidecar(sidecar)
-
-    assert artifact.schema == "essentia-lexicon-sidecar/2"
-    assert len(artifact.digest_sha256) == 64
-    assert artifact.tracks[0].file_key == "sha256:abc"
-    assert artifact.tracks[0].attributes["party"] == 0.9
-    assert artifact.tracks[0].genres[0]["label"] == "Electronic - House"
-    assert "audio" not in artifact.tracks[0].to_row()
-
-
-def test_load_analysis_sidecar_rejects_wrong_schema(tmp_path: Path) -> None:
-    sidecar = tmp_path / "sidecar.json"
-    _write_sidecar(sidecar, schema="essentia-lexicon-sidecar/1")
-
-    with pytest.raises(ValueError, match="unsupported analysis schema"):
-        load_analysis_sidecar(sidecar)
-
-
-def test_load_analysis_sidecar_rejects_missing_file_key(tmp_path: Path) -> None:
-    sidecar = tmp_path / "sidecar.json"
-    _write_sidecar(sidecar)
-    payload = json.loads(sidecar.read_text(encoding="utf-8"))
-    del payload["tracks"]["/music/track.mp3"]["file_key"]
-    sidecar.write_text(json.dumps(payload), encoding="utf-8")
-
-    with pytest.raises(ValueError, match="file_key"):
-        load_analysis_sidecar(sidecar)
-
-
-def test_load_analysis_sidecar_computes_file_key_for_existing_local_mp3(tmp_path: Path) -> None:
-    mp3 = tmp_path / "track.mp3"
-    mp3.write_bytes(b"local-mp3")
-    sidecar = tmp_path / "sidecar.json"
-    _write_sidecar(sidecar)
-    payload = json.loads(sidecar.read_text(encoding="utf-8"))
-    track = payload["tracks"].pop("/music/track.mp3")
-    del track["file_key"]
-    payload["tracks"][str(mp3)] = track
-    sidecar.write_text(json.dumps(payload), encoding="utf-8")
-
-    artifact = load_analysis_sidecar(sidecar)
-
-    assert artifact.tracks[0].file_key.startswith("sha256:")
-
-
-def test_load_analysis_sidecar_rejects_out_of_range_attribute(tmp_path: Path) -> None:
-    sidecar = tmp_path / "sidecar.json"
-    _write_sidecar(sidecar)
-    payload = json.loads(sidecar.read_text(encoding="utf-8"))
-    payload["tracks"]["/music/track.mp3"]["attributes"]["party"] = 1.1
-    sidecar.write_text(json.dumps(payload), encoding="utf-8")
-
-    with pytest.raises(ValueError, match="party"):
-        load_analysis_sidecar(sidecar)
+    assert features["apple_bpm"] == 124.0
+    assert features["beat_count"] == 2
+    assert features["bar_count"] == 1
+    assert features["apple_key"] == "C Major"
+    assert features["key_stable"] is False
+    assert features["key_change_count"] == 1
+    assert features["pace_mean"] == 0.73
+    assert features["pace_volatility"] > 0
+    assert features["intro_length_ms"] == 16_000
+    assert features["outro_length_ms"] == 32_000
+    assert features["section_count"] == 2
+    assert features["segment_count"] == 1
+    assert features["phrase_count"] == 2
+    assert features["has_vocal_activity"] is True
+    assert features["has_drum_activity"] is True
+    assert features["loudness_range_db"] == 9.0
+    assert features["bpm_agreement_score"] > 0.9

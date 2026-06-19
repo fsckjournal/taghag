@@ -62,17 +62,19 @@ matching rows into `audio_file` and `dj_tag`. It requires a Postgres connection
 string via `DB_POSTGRES_URL` or `TAGHAG_DB_POSTGRES_URL` plus
 `TAGHAG_OWNER_USER_ID`.
 
-## Import Essentia metadata
+## Run Apple Music Understanding analysis
 
-Validate a local `essentia-lexicon-sidecar/2` artifact and write a metadata-only
-receipt:
+Analyze registered FLACs with the local Cuecifer Swift analyzer. Dry run prints
+the first analyzer JSON without mutating Supabase:
 
 ```bash
-taghag-import import-analysis --input /path/to/sidecar.json --no-upload
+taghag-import analyze --target /path/to/flac-or-directory --dry-run
 ```
 
-Without `--no-upload`, the command uploads analysis only for tracks already
-registered in `mp3_file`. The local MP3 is never uploaded.
+Without `--dry-run`, the command uploads raw Apple run provenance,
+`apple_track_analysis`, `apple_derived_features`, Apple sections/segments/phrases,
+and beat/bar cues for tracks already registered in `audio_file`. The local FLAC
+is never uploaded.
 
 ## Transcode local FLACs
 

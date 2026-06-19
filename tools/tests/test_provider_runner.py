@@ -139,7 +139,7 @@ def test_provider_evidence_log_can_feed_import_batch(
 ) -> None:
     root = tmp_path / "music"
     root.mkdir()
-    (root / "track.mp3").write_bytes(b"fake mp3")
+    (root / "track.flac").write_bytes(b"fake mp3")
     config = _config(tmp_path)
     marker = {
         "schema": "tagslut.postman.tag_evidence.v1",
@@ -167,7 +167,7 @@ def test_provider_evidence_log_can_feed_import_batch(
     monkeypatch.setattr("taghag_import.provider_runner.subprocess.run", lambda *args, **kwargs: SuccessfulRun())
     monkeypatch.setattr(
         cli,
-        "extract_mp3_tags",
+        "extract_flac_tags",
         lambda path: {
             "artist": "Artist",
             "title": "Title",
@@ -189,7 +189,7 @@ def test_provider_evidence_log_can_feed_import_batch(
     )
     monkeypatch.setattr(
         cli,
-        "probe_mp3",
+        "probe_flac",
         lambda path: {
             "duration_s": 1.0,
             "bitrate_kbps": 320,

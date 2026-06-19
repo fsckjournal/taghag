@@ -61,7 +61,7 @@ def _build_index(*, raw_json: dict[str, object] | None = None) -> sonic_discover
     track = sonic_discovery.TrackRecord(
         owner_user_id="owner",
         audio_file_id="track-1",
-        path="/music/track-1.mp3",
+        path="/music/track-1.flac",
         analysis_id="analysis-1",
         analysis_computed_at=datetime.now(timezone.utc),
         happy=0.4,
@@ -91,15 +91,15 @@ def _build_index(*, raw_json: dict[str, object] | None = None) -> sonic_discover
 def test_sonic_discovery_producer_vibes_vector_and_evolution() -> None:
     index = _build_index()
 
-    vibe_names = [vibe.name for vibe in index.producer_vibes_for("/music/track-1.mp3")]
+    vibe_names = [vibe.name for vibe in index.producer_vibes_for("/music/track-1.flac")]
     assert vibe_names == ["peak_time_house", "warm_dancefloor"]
 
-    vector = index.sonic_vector_for("/music/track-1.mp3")
+    vector = index.sonic_vector_for("/music/track-1.flac")
     assert len(vector) == 7
     assert sum(value * value for value in vector) == pytest.approx(1.0)
 
-    assert index.dynamic_evolution_for("/music/track-1.mp3") is True
-    assert index.evolution_delta_for("/music/track-1.mp3") == pytest.approx(0.7071067811865476)
+    assert index.dynamic_evolution_for("/music/track-1.flac") is True
+    assert index.evolution_delta_for("/music/track-1.flac") == pytest.approx(0.7071067811865476)
 
 
 def test_sonic_discovery_recompute_all_upserts(monkeypatch) -> None:
@@ -127,7 +127,7 @@ def test_sonic_discovery_similar_tracks_queries_postgres(monkeypatch) -> None:
     cursor = _DummyCursor(
         rows=[
             {
-                "path": "/music/track-2.mp3",
+                "path": "/music/track-2.flac",
                 "embedding_text": "[0.1,0.2,0.3,0.4,0.5,0.6,0.7]",
                 "distance": 0.125,
             }
@@ -137,10 +137,10 @@ def test_sonic_discovery_similar_tracks_queries_postgres(monkeypatch) -> None:
     monkeypatch.setattr(sonic_discovery, "open_database", _dummy_database)
     monkeypatch.setattr(sonic_discovery, "dict_cursor", lambda conn: _DummyCursorContext(cursor))
 
-    results = index.similar_tracks("/music/track-1.mp3", limit=5)
+    results = index.similar_tracks("/music/track-1.flac", limit=5)
 
     assert len(results) == 1
-    assert results[0].path == "/music/track-2.mp3"
+    assert results[0].path == "/music/track-2.flac"
     assert results[0].distance == 0.125
     assert cursor.executed, "expected a SQL query"
     sql, params = cursor.executed[0]
@@ -155,11 +155,11 @@ def test_generate_neighborhood_crate_writes_playlist(tmp_path: Path, monkeypatch
             self.config = config
 
         def similar_tracks(self, seed_path: str, limit: int = 30):
-            assert seed_path == "/music/track-1.mp3"
+            assert seed_path == "/music/track-1.flac"
             assert limit == 2
             return [
                 sonic_discovery.SimilarTrack(
-                    path="/music/track-2.mp3",
+                    path="/music/track-2.flac",
                     distance=0.1234,
                     producer_vibes=["peak_time_house"],
                     sonic_vector=[0.0] * 7,
@@ -173,13 +173,13 @@ def test_generate_neighborhood_crate_writes_playlist(tmp_path: Path, monkeypatch
         database_url="postgresql://example",
         owner_user_id="owner",
     ))
-    output = crates.generate_neighborhood_crate("/music/track-1.mp3", limit=2, out_dir=tmp_path)
+    output = crates.generate_neighborhood_crate("/music/track-1.flac", limit=2, out_dir=tmp_path)
 
     assert output.exists()
     contents = output.read_text(encoding="utf-8")
     assert "#EXTM3U" in contents
-    assert "# Seed: /music/track-1.mp3" in contents
-    assert "/music/track-2.mp3" in contents
+    assert "# Seed: /music/track-1.flac" in contents
+    assert "/music/track-2.flac" in contents
 
 
 def test_generate_map_writes_json_and_csv(tmp_path: Path, monkeypatch) -> None:
@@ -188,14 +188,14 @@ def test_generate_map_writes_json_and_csv(tmp_path: Path, monkeypatch) -> None:
         "_load_rows",
         lambda: [
             {
-                "path": "/music/track-1.mp3",
+                "path": "/music/track-1.flac",
                 "embedding_text": "[0.2,0.1,0.3,0.4,0.5,0.6,0.7]",
                 "producer_vibes_json": ["peak_time_house"],
                 "artist": "Artist",
                 "title": "Title",
             },
             {
-                "path": "/music/track-2.mp3",
+                "path": "/music/track-2.flac",
                 "embedding_text": "[0.4,0.3,0.2,0.1,0.0,0.1,0.2]",
                 "producer_vibes_json": [],
                 "artist": None,
@@ -235,7 +235,7 @@ def test_sync_vibes_to_file_rewrites_existing_comment(tmp_path: Path, monkeypatc
             self.saved = True
 
     fake_audio = FakeAudio()
-    mp3_path = tmp_path / "track.mp3"
+    mp3_path = tmp_path / "track.flac"
     mp3_path.write_bytes(b"")
 
     monkeypatch.setattr(sync_vibes, "ID3", lambda path=None: fake_audio)
@@ -260,7 +260,7 @@ def test_apply_corrections_upserts_track_curation(tmp_path: Path, monkeypatch) -
             return self.frames
 
     cursor = _DummyCursor()
-    mp3_path = tmp_path / "track.mp3"
+    mp3_path = tmp_path / "track.flac"
     mp3_path.write_bytes(b"")
 
     monkeypatch.setattr(human_correction, "read_database_config", lambda: DatabaseConfig(

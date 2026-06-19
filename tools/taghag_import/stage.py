@@ -7,11 +7,11 @@ import json
 from pathlib import Path
 from typing import Any
 
-from .audio_probe import probe_mp3
+from .audio_probe import probe_flac
 from .flac import discover_flacs, extract_flac_tags, pcm_sha256, probe_flac, sha256_file
 from .genre import classify_genre
 from .receipt import event, write_receipt
-from .tags import compute_file_identity, extract_mp3_tags
+from .tags import compute_file_identity, extract_flac_tags
 from .transcode import TranscodeJob, execute_transcode_plan
 
 
@@ -174,7 +174,7 @@ def _plan_stage_sources(
         if beatport_album_id and track_number and tags.get("title") and tags.get("artist") and tags.get("album"):
             rel = Path(artist_dir) / album_dir / f"{track_number} - {title}.flac"
 
-        destination = (output_root / "mp3" / rel).with_suffix(".mp3")
+        destination = (output_root / "flac" / rel).with_suffix(".flac")
 
         if not probe.get("valid"):
             items.append(StageItem(path, str(rel), destination, "invalid", None, None, None, tags, probe))
@@ -303,24 +303,23 @@ def execute_stage(
         row["destination"] = str(item.destination)
         row["duplicate_of"] = str(item.duplicate_of) if item.duplicate_of else None
         if item.status in {"admitted", "existing"} and item.destination.is_file():
-            mp3_probe = probe_mp3(item.destination)
-            row["mp3_probe"] = mp3_probe
-            valid_mp3 = (
-                mp3_probe.get("codec") == "mp3"
-                and mp3_probe.get("decode_ok") is True
-                and mp3_probe.get("duration_ok") is True
-                and mp3_probe.get("bitrate_ok") is True
+            flac_probe = probe_flac(item.destination)
+            row["flac_probe"] = flac_probe
+            valid_flac = (
+                flac_probe.get("codec") == "flac"
+                and flac_probe.get("decode_ok") is True
+                and flac_probe.get("duration_ok") is True
             )
-            row["admitted_to_receipt"] = valid_mp3
-            if valid_mp3 and item.pcm_sha256:
-                mp3_tags = extract_mp3_tags(item.destination)
+            row["admitted_to_receipt"] = valid_flac
+            if valid_flac and item.pcm_sha256:
+                flac_tags = extract_flac_tags(item.destination)
                 row["audio_file"] = compute_file_identity(item.destination, item.relative_path)
-                row["mp3_tags"] = mp3_tags
+                row["flac_tags"] = flac_tags
                 row["canonical_genre"] = classify_genre(
-                    mp3_tags.get("genre") or mp3_tags.get("subgenre")
+                    flac_tags.get("genre") or flac_tags.get("subgenre")
                 )
                 validated_fingerprints[item.pcm_sha256] = item.destination
-            elif not valid_mp3:
+            elif not valid_flac:
                 summary["failed"] += 1
         records.append(event("stage_file", **row))
     records.append(event("stage_summary", summary=summary))

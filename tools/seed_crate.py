@@ -4,7 +4,7 @@ import xml.etree.ElementTree as ET
 from urllib.parse import unquote
 from pathlib import Path
 
-from taghag_import.tags import extract_mp3_tags
+from taghag_import.tags import extract_flac_tags
 from taghag_import.config import read_database_config
 from taghag_import.db_client import TaghagDbClient
 
@@ -69,7 +69,7 @@ def build_tags_cache(file_paths: set[str], cache_file: str) -> dict[str, str]:
         if path_str not in cache:
             p = Path(path_str)
             if p.exists():
-                tags = extract_mp3_tags(p)
+                tags = extract_flac_tags(p)
                 isrc = tags.get("isrc")
                 if isrc:
                     cache[path_str] = str(isrc).strip().upper()
@@ -86,7 +86,7 @@ def main():
     parser.add_argument("--xml", help="Path to rekordbox_mikcues_001.xml")
     parser.add_argument("--m3u-dir", help="Directory containing .m3u8 playlists")
     parser.add_argument("--tags-cache", default="tags_cache.json", help="Path to JSON file to collect and reuse tags locally")
-    parser.add_argument("--path-replace", help="Replace prefix in parsed paths, format: old_prefix:new_prefix (e.g. /Volumes/MUSIC:/Volumes/LOSSY/taghag/mp3s)")
+    parser.add_argument("--path-replace", help="Replace prefix in parsed paths, format: old_prefix:new_prefix (e.g. /Volumes/MUSIC:/Volumes/LOSSY/taghag/flacs)")
     parser.add_argument("--dry-run", action="store_true", help="Print operations without executing")
     args = parser.parse_args()
     
@@ -138,7 +138,7 @@ def main():
         
     print(f"Found {len(all_files)} unique file paths. Checking local cache {args.tags_cache}...")
     
-    # Custom cache builder that checks for .mp3 alternative
+    # Custom cache builder that checks for .flac alternative
     cache_path = Path(args.tags_cache)
     cache = {}
     if cache_path.exists():
@@ -151,14 +151,14 @@ def main():
     for path_str in all_files:
         if path_str not in cache:
             p = Path(path_str)
-            if not p.exists() and p.suffix.lower() != ".mp3":
-                # Try falling back to an .mp3 version (in case of transcodes)
-                fallback_p = p.with_suffix(".mp3")
+            if not p.exists() and p.suffix.lower() != ".flac":
+                # Try falling back to an .flac version (in case of transcodes)
+                fallback_p = p.with_suffix(".flac")
                 if fallback_p.exists():
                     p = fallback_p
                     
             if p.exists():
-                tags = extract_mp3_tags(p)
+                tags = extract_flac_tags(p)
                 isrc = tags.get("isrc")
                 if isrc:
                     cache[path_str] = str(isrc).strip().upper()

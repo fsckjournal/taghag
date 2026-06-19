@@ -15,7 +15,7 @@ from psycopg2.extras import execute_values
 from .config import DatabaseConfig, read_database_config
 
 
-DJ_SLICE_CODEC = "mp3"
+DJ_SLICE_CODEC = "flac"
 DJ_SLICE_QUERY = """
     select
         path,
@@ -57,7 +57,7 @@ DJ_SLICE_QUERY = """
         is_dj_material,
         last_scanned_at
     from files
-    where lower(path) like '%.mp3'
+    where lower(path) like '%.flac'
     order by path
 """
 

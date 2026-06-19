@@ -11,12 +11,12 @@ def test_import_batch_writes_receipt_before_upload_and_skips_db_on_dry_run(
 ) -> None:
     root = tmp_path / "music"
     root.mkdir()
-    (root / "track.mp3").write_bytes(b"fake")
+    (root / "track.flac").write_bytes(b"fake")
     receipt_dir = tmp_path / "receipts"
 
     monkeypatch.setattr(
         cli,
-        "extract_mp3_tags",
+        "extract_flac_tags",
         lambda path: {
             "artist": "Artist",
             "title": "Title",
@@ -38,7 +38,7 @@ def test_import_batch_writes_receipt_before_upload_and_skips_db_on_dry_run(
     )
     monkeypatch.setattr(
         cli,
-        "probe_mp3",
+        "probe_flac",
         lambda path: {
             "duration_s": 1.0,
             "bitrate_kbps": 320,
@@ -116,7 +116,7 @@ def test_import_batch_accepts_required_flags() -> None:
 def test_audit_mp3_command_accepts_root_and_output() -> None:
     args = cli.build_parser().parse_args(
         [
-            "audit-mp3",
+            "audit-flac",
             "--root",
             "/tmp/music",
             "--output-dir",
@@ -134,15 +134,15 @@ def test_dump_tags_command_accepts_one_input_source() -> None:
         [
             "dump-tags",
             "--path",
-            "/tmp/track.mp3",
+            "/tmp/track.flac",
             "--path",
-            "/tmp/other.mp3",
+            "/tmp/other.flac",
             "--out",
             "/tmp/tags.jsonl",
         ]
     )
 
-    assert args.paths == ["/tmp/track.mp3", "/tmp/other.mp3"]
+    assert args.paths == ["/tmp/track.flac", "/tmp/other.flac"]
     assert args.out == "/tmp/tags.jsonl"
 
 
@@ -196,3 +196,15 @@ def test_extract_dj_slice_command_accepts_sqlite_db_and_verbose() -> None:
 
     assert args.sqlite_db == "/tmp/music_v3.db"
     assert args.verbose is True
+
+
+def test_analyze_command_is_apple_only_without_engine_selector() -> None:
+    args = cli.build_parser().parse_args(
+        ["analyze", "--target", "/tmp/music", "--dry-run"]
+    )
+
+    assert args.target == Path("/tmp/music")
+    assert args.dry_run is True
+    assert not hasattr(args, "engines")
+    assert not hasattr(args, "fm_model")
+    assert not hasattr(args, "fm_prompt_version")

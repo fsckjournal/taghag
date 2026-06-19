@@ -30,10 +30,10 @@ def test_write_receipt_rejects_header_shaped_secrets(tmp_path: Path) -> None:
 
 
 def test_compute_file_identity_prefers_sha256(tmp_path: Path) -> None:
-    file_path = tmp_path / "track.mp3"
+    file_path = tmp_path / "track.flac"
     file_path.write_bytes(b"hello")
 
-    identity = compute_file_identity(file_path, "track.mp3")
+    identity = compute_file_identity(file_path, "track.flac")
 
     assert str(identity["file_key"]).startswith("sha256:")
     assert identity["checksum_sha256"]

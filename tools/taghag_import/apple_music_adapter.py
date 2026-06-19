@@ -1,11 +1,15 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import subprocess
 from pathlib import Path
+from typing import Any
 
+from .apple_derived_features import compute_derived_features
 from .db_client import TaghagDbClient
 from .flac import probe_flac, sha256_file
+from .mik_xml_adapter import get_mik_bpm
 
 SWIFT_CLI_PATH = Path(__file__).parent.parent / "cuecifer-analyzer" / ".build" / "release" / "cuecifer_analyzer"
 
@@ -14,13 +18,17 @@ def _has_drum_activity(instrument_activity: dict[str, object], threshold: float 
     activity_dict = instrument_activity.get("activity", {})
     if not isinstance(activity_dict, dict):
         return False
-    drums = activity_dict.get("drum", [])
+    drums = activity_dict.get("drum") or activity_dict.get("drums", [])
     if not drums or not isinstance(drums, list):
         return False
-    
+
+    drum_values = [v.get("value", 0.0) for v in drums if isinstance(v, dict)]
+    if not drum_values:
+        return False
+
     # Check if drum activity is virtually 0 throughout
-    active_samples = sum(1 for v in drums if isinstance(v, (int, float)) and v > threshold)
-    return (active_samples / len(drums)) > min_active_ratio
+    active_samples = sum(1 for v in drum_values if isinstance(v, (int, float)) and v > threshold)
+    return (active_samples / len(drum_values)) > min_active_ratio
 
 
 def _downsample_array(arr: list[float], factor: int) -> list[float]:
@@ -31,6 +39,80 @@ def _downsample_array(arr: list[float], factor: int) -> list[float]:
         chunk = arr[i : i + factor]
         result.append(sum(chunk) / len(chunk))
     return result
+
+
+def _canonical_json_bytes(payload: dict[str, object]) -> bytes:
+    return json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
+
+
+def _json_sha256(payload: dict[str, object]) -> str:
+    return hashlib.sha256(_canonical_json_bytes(payload)).hexdigest()
+
+
+def _cmtime_ms(value: Any) -> int | None:
+    if isinstance(value, (int, float)):
+        return int(float(value) * 1000)
+    if not isinstance(value, dict):
+        return None
+    raw_value = value.get("value")
+    raw_timescale = value.get("timescale", 1)
+    try:
+        numerator = float(raw_value)
+        timescale = float(raw_timescale)
+    except (TypeError, ValueError):
+        return None
+    if timescale <= 0:
+        return None
+    return int((numerator / timescale) * 1000)
+
+
+def _range_ms(item: Any) -> tuple[int, int] | None:
+    if not isinstance(item, dict):
+        return None
+    range_data = item.get("range", item)
+    if not isinstance(range_data, dict):
+        return None
+    start_ms = _cmtime_ms(range_data.get("start"))
+    duration_ms = _cmtime_ms(range_data.get("duration"))
+    if start_ms is None or duration_ms is None:
+        return None
+    return start_ms, start_ms + duration_ms
+
+
+def _timed_ms(item: Any) -> int | None:
+    if isinstance(item, dict) and "time" in item:
+        return _cmtime_ms(item.get("time"))
+    return _cmtime_ms(item)
+
+
+def _activity_values(activity: dict[str, Any], name: str) -> list[float]:
+    entries = activity.get(name)
+    if not entries and name == "drum":
+        entries = activity.get("drums")
+    elif not entries and name == "vocal":
+        entries = activity.get("vocals")
+    if not isinstance(entries, list):
+        return []
+    values: list[float] = []
+    for entry in entries:
+        if not isinstance(entry, dict):
+            continue
+        value = entry.get("value")
+        try:
+            values.append(float(value))
+        except (TypeError, ValueError):
+            continue
+    return values
+
+
+def _loudness_scalar(loudness: dict[str, Any], name: str) -> float | None:
+    value = loudness.get(name)
+    if isinstance(value, dict):
+        value = value.get("value")
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
 
 
 def analyze_flac(path: Path) -> dict[str, object] | None:
@@ -67,9 +149,15 @@ def run_apple_music_ingestion(
         "rejected_bpm": 0,
         "rejected_structure": 0,
         "rejected_ambient": 0,
+        "unmatched_audio_file": 0,
+        "analysis_runs": 0,
+        "derived_features": 0,
+        "segments": 0,
+        "cues": 0,
     }
 
     apple_analysis_rows: list[dict[str, object]] = []
+    derived_feature_rows: list[dict[str, object]] = []
     track_segments: list[dict[str, object]] = []
     track_cues: list[dict[str, object]] = []
 
@@ -124,14 +212,32 @@ def run_apple_music_ingestion(
         
         file_sha256 = sha256_file(path)
         file_key = f"sha256:{file_sha256}"
+        source_artifact_sha256 = _json_sha256(data)
         
-        # We need the audio_file_id from DB. We map this later or fetch it now.
         file_ids = client._audio_file_ids_for_file_keys({file_key})
         audio_file_id = file_ids.get(file_key)
         
         if not audio_file_id:
-            print(f"  -> Warning: audio_file_id not found in DB for {file_key}. Skipping DB insert.")
+            print(f"  -> Skipped: no audio_file row for {file_key}")
+            summary["unmatched_audio_file"] += 1
             continue
+
+        run_rows = client.upsert_apple_analysis_runs(
+            [
+                {
+                    "owner_user_id": owner_user_id,
+                    "audio_file_id": audio_file_id,
+                    "source_artifact_sha256": source_artifact_sha256,
+                    "source_path": str(path),
+                    "analyzer": "cuecifer-analyzer",
+                    "raw_result_json": data,
+                }
+            ]
+        )
+        analysis_run_id = None
+        if run_rows and run_rows[0].get("id"):
+            analysis_run_id = str(run_rows[0]["id"])
+        summary["analysis_runs"] += 1
             
         # Global metadata extraction
         key_data = data.get("key", {})
@@ -147,54 +253,93 @@ def run_apple_music_ingestion(
             key_mode, key_tonic = None, None
 
         # Downsample the 100ms arrays (assume 100ms interval -> factor of 10 for 1s)
-        pace_curve = data.get("pace", {}).get("pace", []) if isinstance(data.get("pace"), dict) else []
-        drum_curve = instrument_activity.get("activity", {}).get("drum", []) if isinstance(instrument_activity.get("activity"), dict) else []
-        bass_curve = instrument_activity.get("activity", {}).get("bass", []) if isinstance(instrument_activity.get("activity"), dict) else []
-        vocal_curve = instrument_activity.get("activity", {}).get("vocal", []) if isinstance(instrument_activity.get("activity"), dict) else []
+        pace_curve = data.get("pace", {}).get("ranges", []) if isinstance(data.get("pace"), dict) else []
+        pace_values = [v.get("value", 0.0) for v in pace_curve if isinstance(v, dict)]
+
+        activity = instrument_activity.get("activity", {})
+        if not isinstance(activity, dict):
+            activity = {}
+
+        drum_values = _activity_values(activity, "drum")
+        bass_values = _activity_values(activity, "bass")
+        vocal_values = _activity_values(activity, "vocal")
+        loudness = data.get("loudness", {})
+        if not isinstance(loudness, dict):
+            loudness = {}
 
         apple_analysis_rows.append({
             "owner_user_id": owner_user_id,
             "audio_file_id": audio_file_id,
-            "source_artifact_sha256": file_sha256,
+            "analysis_run_id": analysis_run_id,
+            "source_artifact_sha256": source_artifact_sha256,
             "global_bpm": bpm,
             "key_mode": key_mode,
             "key_tonic": key_tonic,
-            "pace_curve": _downsample_array(pace_curve, 10),
-            "drum_activity": _downsample_array(drum_curve, 10),
-            "bass_activity": _downsample_array(bass_curve, 10),
-            "vocal_activity": _downsample_array(vocal_curve, 10),
+            "pace_curve": _downsample_array(pace_values, 10),
+            "drum_activity": _downsample_array(drum_values, 10),
+            "bass_activity": _downsample_array(bass_values, 10),
+            "vocal_activity": _downsample_array(vocal_values, 10),
+            "loudness_momentary": loudness.get("momentary", []),
+            "loudness_short_term": loudness.get("shortTerm", []),
+            "loudness_integrated": _loudness_scalar(loudness, "integrated"),
+            "loudness_peak": _loudness_scalar(loudness, "peak"),
         })
 
-        # Map Sections
-        for section in sections:
-            if not isinstance(section, dict):
-                continue
-            range_data = section.get("range", {})
-            start_ms = int(range_data.get("start", {}).get("value", 0) / 44.1) # timescales are often 44100
-            dur_ms = int(range_data.get("duration", {}).get("value", 0) / 44.1)
-            
-            track_segments.append({
+        derived = compute_derived_features(data, filename=path.name, reference_bpm=get_mik_bpm(path.name))
+        derived.update(
+            {
                 "owner_user_id": owner_user_id,
                 "audio_file_id": audio_file_id,
-                "role": section.get("value", "unknown"),
-                "ms_start": start_ms,
-                "ms_end": start_ms + dur_ms,
-                "source_system": "apple_music_understanding"
-            })
-            
-        # Map Beats
-        beats = rhythm.get("beats", [])
-        for beat in beats:
-            if not isinstance(beat, dict):
+                "analysis_run_id": analysis_run_id,
+                "source_artifact_sha256": source_artifact_sha256,
+            }
+        )
+        derived_feature_rows.append(derived)
+        summary["derived_features"] += 1
+
+        # Map all three structure levels: sections, segments, phrases
+        for level_name, level_data in [("section", sections), ("segment", structure.get("segments", [])), ("phrase", structure.get("phrases", []))]:
+            for item in level_data:
+                bounds = _range_ms(item)
+                if bounds is None:
+                    continue
+                start_ms, end_ms = bounds
+
+                track_segments.append({
+                    "owner_user_id": owner_user_id,
+                    "audio_file_id": audio_file_id,
+                    "role": f"apple_{level_name}",
+                    "ms_start": start_ms,
+                    "ms_end": end_ms,
+                    "source_system": "apple_music_understanding",
+                })
+
+        for cue_type, cue_items in [("beat", rhythm.get("beats", [])), ("bar", rhythm.get("bars", []))]:
+            if not isinstance(cue_items, list):
                 continue
-            time_ms = int(beat.get("time", {}).get("value", 0) / 44.1)
-            # A beat isn't exactly a cue, but we can store downbeats or specific structural beats
-            # For now we'll just store the first beat of sections as cues to avoid huge cue tables
-            pass
+            for i, item in enumerate(cue_items):
+                cue_ms = _timed_ms(item)
+                if cue_ms is None:
+                    continue
+                track_cues.append({
+                    "owner_user_id": owner_user_id,
+                    "audio_file_id": audio_file_id,
+                    "name": f"Apple {cue_type} {i + 1}",
+                    "cue_type": cue_type,
+                    "time_ms": cue_ms,
+                    "beat_time": i + 1 if cue_type == "beat" else None,
+                    "source_system": "apple_music_understanding",
+                })
 
     if apple_analysis_rows:
         client.upsert_apple_track_analysis(apple_analysis_rows)
+    if derived_feature_rows:
+        client.upsert_apple_derived_features(derived_feature_rows)
     if track_segments:
         client.insert_track_segments(track_segments)
+        summary["segments"] = len(track_segments)
+    if track_cues:
+        client.insert_track_cues(track_cues)
+        summary["cues"] = len(track_cues)
     
     return summary

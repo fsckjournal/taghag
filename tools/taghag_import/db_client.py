@@ -118,6 +118,21 @@ class TaghagDbClient:
             on_conflict="owner_user_id,audio_file_id,source_artifact_sha256",
         )
 
+    def upsert_apple_analysis_runs(self, run_rows: list[dict[str, object]]) -> list[dict[str, object]]:
+        return self._postgrest_request(
+            "apple_analysis_runs",
+            run_rows,
+            on_conflict="owner_user_id,audio_file_id,source_artifact_sha256",
+            return_rows=True,
+        )
+
+    def upsert_apple_derived_features(self, feature_rows: list[dict[str, object]]) -> None:
+        self._postgrest_request(
+            "apple_derived_features",
+            feature_rows,
+            on_conflict="owner_user_id,audio_file_id,source_artifact_sha256",
+        )
+
     def upsert_track_embedding(self, embedding_rows: list[dict[str, object]]) -> None:
         self._postgrest_request(
             "track_embedding",

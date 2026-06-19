@@ -2,9 +2,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-import subprocess
 import concurrent.futures
 import os
+import shutil
 import sys
 import threading
 import json
@@ -69,7 +69,7 @@ def build_transcode_plan(
         if not path.is_file() or path.suffix.casefold() != ".flac":
             continue
         resolved_source = path.resolve()
-        destination = (output / path.relative_to(source)).with_suffix(".mp3")
+        destination = (output / path.relative_to(source)).with_suffix(".flac")
         
         if resolved_source in failures:
             status = "failed-skipped"
@@ -84,52 +84,27 @@ def build_transcode_plan(
     return jobs
 
 
-def _ffmpeg_command(job: TranscodeJob) -> list[str]:
-    return [
-        "ffmpeg",
-        "-nostdin",
-        "-hide_banner",
-        "-loglevel",
-        "error",
-        "-i",
-        str(job.source),
-        "-map",
-        "0:a:0",
-        "-map_metadata",
-        "0",
-        "-codec:a",
-        "libmp3lame",
-        "-b:a",
-        "320k",
-        "-id3v2_version",
-        "3",
-        "-y",
-        str(job.destination),
-    ]
-
-
 def _execute_single_job(job: TranscodeJob) -> tuple[TranscodeJob, bool, str]:
     if job.status != "ready":
         return job, True, ""
     job.destination.parent.mkdir(parents=True, exist_ok=True)
-    completed = subprocess.run(
-        _ffmpeg_command(job),
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    if completed.returncode != 0 or not job.destination.is_file() or job.destination.stat().st_size == 0:
+    try:
+        shutil.copy2(job.source, job.destination)
+    except OSError as exc:
         job.destination.unlink(missing_ok=True)
-        return job, False, completed.stderr.strip()
+        return job, False, str(exc)
+    if not job.destination.is_file() or job.destination.stat().st_size == 0:
+        job.destination.unlink(missing_ok=True)
+        return job, False, "copy produced an empty destination"
         
     if job.pcm_sha256 or job.metadata_tags:
         try:
-            from .tags import apply_mp3_tag_updates
+            from .tags import apply_flac_tag_updates
             updates = dict(job.metadata_tags or {})
             if job.pcm_sha256:
                 updates["pcm_hash"] = job.pcm_sha256
             if updates:
-                apply_mp3_tag_updates(job.destination, updates, execute=True)
+                apply_flac_tag_updates(job.destination, updates, execute=True)
         except Exception as e:
             job.destination.unlink(missing_ok=True)
             return job, False, f"Failed to inject tags: {e}"

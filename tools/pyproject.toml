@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "taghag-import"
 version = "0.1.0"
-description = "MP3-only import tooling for Taghag"
+description = "FLAC-first import and analysis tooling for Taghag"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [

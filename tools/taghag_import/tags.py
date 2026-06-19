@@ -130,7 +130,7 @@ def _find_frame(id3_tags: Mapping[str, Any], frame_id: str) -> Any | None:
     return None
 
 
-def extract_mp3_tags(path: str | Path) -> dict[str, Any]:
+def extract_flac_tags(path: str | Path) -> dict[str, Any]:
     file_path = Path(path).expanduser().resolve()
     id3_tags = _load_id3(file_path)
 
@@ -204,7 +204,7 @@ def _safe_frame_values(frame: Any, max_value_len: int) -> list[str]:
     return [rendered[:max_value_len]] if rendered else []
 
 
-def dump_mp3_tags(
+def dump_flac_tags(
     path: str | Path,
     *,
     max_value_len: int = 2000,
@@ -224,7 +224,7 @@ def _normalize_updates(updates: Mapping[str, object]) -> dict[str, str]:
     for raw_field, raw_value in updates.items():
         field = FIELD_ALIASES.get(str(raw_field).strip().lower(), str(raw_field).strip().lower())
         if field not in WRITABLE_FIELDS:
-            raise ValueError(f"unsupported MP3 tag field: {raw_field}")
+            raise ValueError(f"unsupported FLAC tag field: {raw_field}")
         value = str(raw_value or "").strip()
         if value:
             normalized[field] = value
@@ -335,10 +335,10 @@ def _set_field(tags: Any, field: str, value: str) -> None:
     if field in {"compilation", "rating", "energy", "pcm_hash", "spotify_id", "beatport_album_id", "beatport_track_id"}:
         _replace_txxx(tags, field.upper(), value)
         return
-    raise ValueError(f"unsupported MP3 tag field: {field}")
+    raise ValueError(f"unsupported FLAC tag field: {field}")
 
 
-def apply_mp3_tag_updates(
+def apply_flac_tag_updates(
     path: str | Path,
     updates: Mapping[str, object],
     *,
@@ -348,8 +348,8 @@ def apply_mp3_tag_updates(
     from mutagen.id3 import ID3, ID3NoHeaderError
 
     file_path = Path(path).expanduser().resolve()
-    if file_path.suffix.lower() != ".mp3":
-        raise ValueError(f"not an MP3 file: {file_path}")
+    if file_path.suffix.lower() != ".flac":
+        raise ValueError(f"not a FLAC file: {file_path}")
     if not file_path.is_file():
         raise FileNotFoundError(file_path)
 

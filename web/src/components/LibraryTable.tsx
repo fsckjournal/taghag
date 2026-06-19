@@ -8,7 +8,7 @@ function qualityLabel(track: LibraryTrack) {
 
 export function LibraryTable({ tracks }: { tracks: LibraryTrack[] }) {
   if (tracks.length === 0) {
-    return <p style={{ color: "#66777b" }}>No MP3 rows found.</p>;
+    return <p style={{ color: "#66777b" }}>No audio rows found.</p>;
   }
 
   return (

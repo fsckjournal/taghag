@@ -41,7 +41,7 @@ While the goal is to support FLAC, any generic extraction or tagging tool built 
 **Modules to directly reuse/port to `tagslut`:**
 - `tools/taghag_import/advanced_cue_planner.py`: The core Beam Search routing logic for generating setlists.
 - `tools/taghag_import/beatport_resolver.py`: The iWebDJ decoding matrix and catalog search.
-- `tools/taghag_import/essentia_adapter.py` & `sonic_discovery.py`: Vibe extraction.
+- Apple Music Understanding ingestion and derived-feature code: deterministic local feature extraction. Retired Essentia sidecar adapters and hidden LLM/MLX paths are not reusable live surfaces.
 - `tools/taghag_import/mixonset.py`: The `.dat` decryption and mapping.
 - `tools/taghag_import/tags.py`: Binary-safe tag dumping and writing. *This module was initially designed for MP3 ID3 tags, but its structural safety and dry-run boundaries make it an excellent template for Vorbis comment manipulation in FLAC.*
 - `tools/taghag_import/genre.py` & `genre_rules.json`: General purpose case-insensitive genre normalization.

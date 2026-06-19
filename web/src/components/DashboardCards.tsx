@@ -1,7 +1,7 @@
 import type { DashboardCounts } from "../lib/queries";
 
 const labels: Array<[keyof DashboardCounts, string]> = [
-  ["totalMp3s", "MP3s"],
+  ["totalFlacs", "FLACs"],
   ["missingArtistTitle", "Missing artist/title"],
   ["missingBpmKey", "Missing BPM/key"],
   ["missingGenreSubgenre", "Missing genre/subgenre"],

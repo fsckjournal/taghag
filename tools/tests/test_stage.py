@@ -82,7 +82,7 @@ def test_load_stage_manifest_sorts_valid_sources(tmp_path: Path) -> None:
     [
         ("missing.flac", "release/missing.flac", "absolute"),
         ("/missing.flac", "release/missing.flac", "does not exist"),
-        ("/tmp/track.mp3", "release/track.mp3", "FLAC"),
+        ("/tmp/track.wav", "release/track.wav", "FLAC"),
         ("/tmp/track.flac", "/absolute.flac", "relative"),
         ("/tmp/track.flac", "../escape.flac", "traversal"),
     ],
@@ -173,7 +173,7 @@ def test_plan_stage_manifest_uses_relative_paths_and_cross_source_dedupe(
     plan = plan_stage_manifest(manifest, tmp_path / "out")
 
     assert plan.source_root == manifest.resolve()
-    assert plan.items[0].destination == (tmp_path / "out/mp3/release-a/a.mp3").resolve()
+    assert plan.items[0].destination == (tmp_path / "out/flac/release-a/a.flac").resolve()
     assert plan.items[0].status == "admitted"
     assert plan.items[1].status == "audio-duplicate-blocked"
     assert plan.items[1].duplicate_of == first.resolve()

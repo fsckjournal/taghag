@@ -5,12 +5,12 @@ from pathlib import Path
 import subprocess
 
 
-def probe_mp3(path: str | Path) -> dict[str, object]:
+def probe_flac(path: str | Path) -> dict[str, object]:
     file_path = Path(path).expanduser().resolve()
     issue_codes: list[str] = []
     duration_s = None
     bitrate_kbps = None
-    codec = "mp3"
+    codec = "unknown"
     sample_rate_hz = None
     channels = None
     probe_ok = False

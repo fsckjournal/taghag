@@ -3,14 +3,14 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from taghag_import.audio_probe import probe_mp3
+from taghag_import.audio_probe import probe_flac
 
 
-def test_probe_mp3_selects_audio_stream_and_reports_technical_fields(
+def test_probe_flac_selects_audio_stream_and_reports_technical_fields(
     tmp_path: Path, monkeypatch
 ) -> None:
-    mp3 = tmp_path / "track.mp3"
-    mp3.write_bytes(b"fake")
+    flac = tmp_path / "track.flac"
+    flac.write_bytes(b"fake")
 
     class Completed:
         def __init__(self, returncode: int, stdout: str = "", stderr: str = "") -> None:
@@ -29,7 +29,7 @@ def test_probe_mp3_selects_audio_stream_and_reports_technical_fields(
                             {"codec_type": "video", "codec_name": "mjpeg"},
                             {
                                 "codec_type": "audio",
-                                "codec_name": "mp3",
+                                "codec_name": "flac",
                                 "sample_rate": "44100",
                                 "channels": 2,
                             },
@@ -41,9 +41,9 @@ def test_probe_mp3_selects_audio_stream_and_reports_technical_fields(
 
     monkeypatch.setattr("taghag_import.audio_probe.subprocess.run", fake_run)
 
-    result = probe_mp3(mp3)
+    result = probe_flac(flac)
 
-    assert result["codec"] == "mp3"
+    assert result["codec"] == "flac"
     assert result["sample_rate_hz"] == 44100
     assert result["channels"] == 2
     assert result["duration_s"] == 180.25

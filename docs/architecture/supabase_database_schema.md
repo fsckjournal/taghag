@@ -347,7 +347,24 @@ The Apple analysis command resolves each FLAC by Taghag `file_key`, then stores
 raw analyzer provenance in `apple_analysis_runs`, normalized curves in
 `apple_track_analysis`, derived scalars in `apple_derived_features`, and Apple
 segments/cues in `track_segment` and `track_cue`. Unmatched files are counted
-and skipped rather than creating orphan records.
+and skipped rather than creating orphan records. Successful Apple runs also
+write a `track_embedding` row with `vector_schema = 'apple_hybrid_v1'`.
+
+`apple_hybrid_v1` keeps the existing seven-dimensional pgvector shape and uses
+these interpreted dimensions:
+
+1. `apple_bpm_norm` - Apple BPM divided by 200 and clipped to 0..1.
+2. `pace_mean` - mean Apple pace scalar.
+3. `pace_volatility` - Apple pace standard deviation.
+4. `vocal_intensity_mean` - mean Apple vocal activity.
+5. `drum_intensity_mean` - mean Apple drum activity.
+6. `bass_intensity_mean` - mean Apple bass activity.
+7. `loudness_range_norm` - Apple loudness range divided by 30 dB and clipped.
+
+Run `taghag-import apple-audit --out <csv>` after analysis to write a
+metadata-only disagreement report. The report flags Apple-vs-`dj_tag` BPM
+deltas above the configured threshold, low Apple/MIK BPM agreement scores, and
+unstable Apple keys.
 
 ## Cuecifer Expansion Notes
 
@@ -390,9 +407,13 @@ python cuecifer/sync_vibes.py --execute
 ```
 
 `sonic_discovery.py` reads `track_analysis` and `dj_tag`, computes the
-normalized `sonic7_v1` vector, and upserts `track_embedding`. `human_correction.py`
-writes pinned corrections into `track_curation`, and `sync_vibes.py` writes the
-resolved vibe list back into local FLAC comments.
+normalized `sonic7_v1` vector, and upserts `track_embedding`. Apple analysis
+upserts `apple_hybrid_v1` vectors during `taghag-import analyze`. Butter Flow
+uses the legacy cue/vector model as a fallback and adds Apple-derived
+phrase-boundary, pace, vocal-overlap, loudness-handoff, BPM-disagreement, and
+key-stability cost terms when `apple_derived_features` rows exist.
+`human_correction.py` writes pinned corrections into `track_curation`, and
+`sync_vibes.py` writes the resolved vibe list back into local FLAC comments.
 
 ## Operational Notes
 

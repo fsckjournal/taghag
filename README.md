@@ -186,7 +186,8 @@ Apple Music Understanding outputs as deterministic analysis data. The raw
 analyzer JSON is kept in `apple_analysis_runs`, normalized global curves land in
 `apple_track_analysis`, scalar features land in `apple_derived_features`, and
 sections, segments, phrases, beats, and bars are written to `track_segment` and
-`track_cue`.
+`track_cue`. Each successful Apple run also upserts an interpretable
+`apple_hybrid_v1` row into `track_embedding`.
 
 Run a local analyzer smoke test without contacting Supabase:
 
@@ -198,14 +199,27 @@ taghag-import analyze \
 ```
 
 Remove `--dry-run` to resolve each FLAC by its existing `audio_file.file_key`
-and upload the Apple raw run, normalized curves, derived scalars, segments, and
-cues. The pipeline does not call an LLM or upload audio bytes.
+and upload the Apple raw run, normalized curves, derived scalars, hybrid vector,
+segments, and cues. The pipeline does not call an LLM or upload audio bytes.
+
+Write a CSV of Apple-vs-legacy disagreements after analysis:
+
+```bash
+taghag-import apple-audit \
+  --out ../artifacts/apple_disagreements.csv
+```
+
+The report flags large Apple-vs-`dj_tag` BPM deltas, low Apple/MIK BPM
+agreement scores, and unstable Apple keys.
 
 ## Cuecifer engine and sync tools
 
-The Cuecifer engine now reads `track_analysis` and `dj_tag` from Postgres,
-normalizes a seven-dimensional vector, and upserts the result into
-`track_embedding`.
+The Cuecifer engine can store legacy `sonic7_v1` vectors from `track_analysis`
+and `dj_tag`, plus deterministic Apple `apple_hybrid_v1` vectors from
+`apple_derived_features`. Butter Flow path planning still falls back to the
+legacy cue/vector model, but when Apple-derived features exist it adds
+phrase-boundary, pace, vocal-overlap, loudness-handoff, BPM-disagreement, and
+key-stability risk terms to the transition cost.
 
 Run it from `tools/` with the owner-scoped database env vars:
 

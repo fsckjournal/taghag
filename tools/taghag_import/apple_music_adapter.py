@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from .apple_derived_features import compute_derived_features
+from .apple_hybrid_vector import build_apple_hybrid_embedding_row
 from .db_client import TaghagDbClient
 from .flac import probe_flac, sha256_file
 from .mik_xml_adapter import get_mik_bpm
@@ -152,12 +153,14 @@ def run_apple_music_ingestion(
         "unmatched_audio_file": 0,
         "analysis_runs": 0,
         "derived_features": 0,
+        "apple_vectors": 0,
         "segments": 0,
         "cues": 0,
     }
 
     apple_analysis_rows: list[dict[str, object]] = []
     derived_feature_rows: list[dict[str, object]] = []
+    apple_vector_rows: list[dict[str, object]] = []
     track_segments: list[dict[str, object]] = []
     track_cues: list[dict[str, object]] = []
 
@@ -295,7 +298,16 @@ def run_apple_music_ingestion(
             }
         )
         derived_feature_rows.append(derived)
+        apple_vector_rows.append(
+            build_apple_hybrid_embedding_row(
+                owner_user_id=owner_user_id,
+                audio_file_id=audio_file_id,
+                source_analysis_id=analysis_run_id,
+                features=derived,
+            )
+        )
         summary["derived_features"] += 1
+        summary["apple_vectors"] += 1
 
         # Map all three structure levels: sections, segments, phrases
         for level_name, level_data in [("section", sections), ("segment", structure.get("segments", [])), ("phrase", structure.get("phrases", []))]:
@@ -335,6 +347,8 @@ def run_apple_music_ingestion(
         client.upsert_apple_track_analysis(apple_analysis_rows)
     if derived_feature_rows:
         client.upsert_apple_derived_features(derived_feature_rows)
+    if apple_vector_rows:
+        client.upsert_track_embedding(apple_vector_rows)
     if track_segments:
         client.insert_track_segments(track_segments)
         summary["segments"] = len(track_segments)

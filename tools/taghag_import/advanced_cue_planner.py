@@ -13,6 +13,7 @@ from psycopg2.extras import RealDictCursor
 
 from .config import read_database_config
 from .db_client import TaghagDbClient
+from .apple_butterflow import score_apple_transition
 
 # Defensive imports for librosa/numpy
 try:
@@ -245,6 +246,7 @@ class CandidateEdge:
     camelot_dist: float
     cue_confidence: float
     role: str
+    apple_cost: float = 0.0
 
 
 @dataclass
@@ -260,12 +262,21 @@ class ButterFlowPlanner:
         self.db_client = db_client
         self.config = db_client._config
 
-    def edge_cost(self, edge: CandidateEdge, w1: float, w2: float, w3: float, w4: float) -> float:
+    def edge_cost(
+        self,
+        edge: CandidateEdge,
+        w1: float,
+        w2: float,
+        w3: float,
+        w4: float,
+        w5: float = 0.75,
+    ) -> float:
         return (
             w1 * edge.vibe_dist
             + w2 * edge.bpm_delta
             + w3 * edge.camelot_dist
             + w4 * (1.0 - edge.cue_confidence)
+            + w5 * edge.apple_cost
         )
 
     def plan_sequence(
@@ -276,12 +287,13 @@ class ButterFlowPlanner:
         w1: float = 1.0,  # Vibe similarity weight
         w2: float = 0.5,  # BPM tolerance weight
         w3: float = 0.75, # Camelot transition weight
-        w4: float = 0.5   # Cue confidence weight
+        w4: float = 0.5,  # Cue confidence weight
+        w5: float = 0.75, # Apple-derived phrase/pace/vocal/loudness risk weight
     ) -> list[BeamState]:
         # Fetch seed details from segment ID via REST
         seed_rows = self.db_client._get_postgrest_rows(
             "track_segment",
-            {"select": "id,audio_file_id,control_vec", "id": f"eq.{seed_segment_id}"}
+            {"select": "id,audio_file_id,role,control_vec", "id": f"eq.{seed_segment_id}"}
         )
         if not seed_rows:
             raise ValueError(f"Seed segment {seed_segment_id} not found in database.")
@@ -352,6 +364,7 @@ class ButterFlowPlanner:
             offset += limit
 
         print(f"Cached {len(dj_tags_cache)} dj_tags and {len(segments_cache)} segments.")
+        apple_features_cache = self._load_apple_features_cache()
 
         beam = [BeamState(path=[seed_segment_id], cost=0.0, last_segment_id=seed_segment_id, last_audio_file_id=seed_audio_id)]
 
@@ -374,6 +387,7 @@ class ButterFlowPlanner:
                     last_seg = {
                         "id": seed_id,
                         "audio_file_id": seed_audio_id,
+                        "role": seed_seg.get("role"),
                         "control_vec_parsed": seed_vec,
                         "confidence": 1.0
                     }
@@ -428,6 +442,12 @@ class ButterFlowPlanner:
                     c_dist = camelot_distance(last_key, candidate["camelot_key"])
                     if c_dist > 2.0:
                         continue
+                    apple_score = score_apple_transition(
+                        apple_features_cache.get(str(state.last_audio_file_id)),
+                        apple_features_cache.get(str(candidate["audio_file_id"])),
+                        from_segment=last_seg,
+                        to_segment=candidate,
+                    )
 
                     edge = CandidateEdge(
                         candidate_segment_id=str(candidate["id"]),
@@ -436,10 +456,11 @@ class ButterFlowPlanner:
                         bpm_delta=abs(last_bpm - float(candidate["bpm"])),
                         camelot_dist=float(c_dist),
                         cue_confidence=float(candidate["confidence"]),
-                        role=str(candidate["role"])
+                        role=str(candidate["role"]),
+                        apple_cost=apple_score.total_cost,
                     )
                     
-                    cost = self.edge_cost(edge, w1=w1, w2=w2, w3=w3, w4=w4)
+                    cost = self.edge_cost(edge, w1=w1, w2=w2, w3=w3, w4=w4, w5=w5)
                     expanded.append(
                         BeamState(
                             path=state.path + [edge.candidate_segment_id],
@@ -456,3 +477,34 @@ class ButterFlowPlanner:
             beam = expanded[:beam_width]
 
         return beam
+
+    def _load_apple_features_cache(self) -> dict[str, dict[str, object]]:
+        cache: dict[str, dict[str, object]] = {}
+        offset = 0
+        limit = 1000
+        while True:
+            try:
+                rows = self.db_client._get_postgrest_rows(
+                    "apple_derived_features",
+                    {
+                        "select": (
+                            "audio_file_id,pace_mean,pace_volatility,"
+                            "vocal_intensity_mean,loudness_integrated,"
+                            "bpm_agreement_score,key_stable,computed_at"
+                        ),
+                        "owner_user_id": f"eq.{self.config.owner_user_id}",
+                        "order": "computed_at.desc",
+                        "limit": str(limit),
+                        "offset": str(offset),
+                    },
+                )
+            except Exception:
+                return cache
+            if not rows:
+                break
+            for row in rows:
+                audio_file_id = row.get("audio_file_id")
+                if audio_file_id and str(audio_file_id) not in cache:
+                    cache[str(audio_file_id)] = row
+            offset += limit
+        return cache

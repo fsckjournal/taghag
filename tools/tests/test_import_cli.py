@@ -208,3 +208,21 @@ def test_analyze_command_is_apple_only_without_engine_selector() -> None:
     assert not hasattr(args, "engines")
     assert not hasattr(args, "fm_model")
     assert not hasattr(args, "fm_prompt_version")
+
+
+def test_apple_audit_command_accepts_report_flags() -> None:
+    args = cli.build_parser().parse_args(
+        [
+            "apple-audit",
+            "--out",
+            "/tmp/apple-disagreements.csv",
+            "--bpm-threshold-pct",
+            "1.5",
+            "--agreement-threshold",
+            "0.75",
+        ]
+    )
+
+    assert args.out == "/tmp/apple-disagreements.csv"
+    assert args.bpm_threshold_pct == 1.5
+    assert args.agreement_threshold == 0.75

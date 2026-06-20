@@ -42,6 +42,7 @@ from .generate_neighborhood_crate import CrateGenerator
 from .apply_human_correction import apply_human_corrections
 from .sync_vibes_to_id3 import sync_postgres_vibes_to_id3
 from .advanced_cue_planner import AnlzImporter, SegmentExtractor, ButterFlowPlanner, LIBROSA_AVAILABLE, PYREKORDBOX_AVAILABLE
+from .apple_disagreement_report import load_apple_disagreement_rows, write_apple_disagreement_csv
 from .mixonset import MixonsetImporter
 from .apple_music_adapter import run_apple_music_ingestion
 
@@ -834,6 +835,15 @@ def build_parser() -> argparse.ArgumentParser:
     analyze_unified.add_argument("--dry-run", action="store_true", help="Run the analyzer on one FLAC without mutating DB")
     analyze_unified.set_defaults(func=_analyze_unified)
 
+    apple_audit = subparsers.add_parser(
+        "apple-audit",
+        help="Write a CSV report of Apple vs legacy BPM/key-confidence disagreements",
+    )
+    apple_audit.add_argument("--out", required=True, help="CSV path to write")
+    apple_audit.add_argument("--bpm-threshold-pct", type=float, default=2.0, help="Flag BPM deltas above this percent")
+    apple_audit.add_argument("--agreement-threshold", type=float, default=0.8, help="Flag Apple/MIK BPM agreement scores below this value")
+    apple_audit.set_defaults(func=_apple_audit)
+
     # --- Taghag Intelligence Extensions ---
     
     # 1. Preflight
@@ -1049,6 +1059,19 @@ def _analyze_unified(args: argparse.Namespace) -> int:
     except Exception as exc:
         print(f"Apple analysis failed: {exc}")
         return 1
+
+
+def _apple_audit(args: argparse.Namespace) -> int:
+    client = TaghagDbClient(read_database_config())
+    rows = load_apple_disagreement_rows(
+        client,
+        bpm_threshold_pct=args.bpm_threshold_pct,
+        agreement_threshold=args.agreement_threshold,
+    )
+    out = write_apple_disagreement_csv(args.out, rows)
+    print(f"Apple disagreement report written: {out} ({len(rows)} flagged tracks)")
+    return 0
+
 
 def _cuecifer_command(args: argparse.Namespace) -> int:
     client = TaghagDbClient(read_database_config())

@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from taghag_import import apple_music_adapter
+from taghag_import.apple_hybrid_vector import APPLE_HYBRID_VECTOR_SCHEMA
 
 
 def _time(value: int, timescale: int = 1_000) -> dict[str, int]:
@@ -48,6 +49,7 @@ class FakeClient:
         self.analysis_runs: list[dict[str, object]] = []
         self.apple_analysis: list[dict[str, object]] = []
         self.derived_features: list[dict[str, object]] = []
+        self.embeddings: list[dict[str, object]] = []
         self.segments: list[dict[str, object]] = []
         self.cues: list[dict[str, object]] = []
 
@@ -64,6 +66,9 @@ class FakeClient:
 
     def upsert_apple_derived_features(self, rows: list[dict[str, object]]) -> None:
         self.derived_features.extend(rows)
+
+    def upsert_track_embedding(self, rows: list[dict[str, object]]) -> None:
+        self.embeddings.extend(rows)
 
     def insert_track_segments(self, rows: list[dict[str, object]]) -> None:
         self.segments.extend(rows)
@@ -90,6 +95,7 @@ def test_apple_ingestion_uploads_raw_runs_derived_features_segments_and_cues(
     assert summary["eligible"] == 1
     assert summary["analysis_runs"] == 1
     assert summary["derived_features"] == 1
+    assert summary["apple_vectors"] == 1
     assert summary["segments"] == 3
     assert summary["cues"] == 3
     assert client.analysis_runs[0]["raw_result_json"] == _apple_payload()
@@ -98,6 +104,9 @@ def test_apple_ingestion_uploads_raw_runs_derived_features_segments_and_cues(
     assert client.apple_analysis[0]["loudness_short_term"] == [{"value": -12.0}, {"value": -8.0}]
     assert client.derived_features[0]["phrase_count"] == 1
     assert client.derived_features[0]["bpm_agreement_score"] > 0.9
+    assert client.embeddings[0]["source_analysis_id"] == "run-1"
+    assert client.embeddings[0]["vector_schema"] == APPLE_HYBRID_VECTOR_SCHEMA
+    assert len(client.embeddings[0]["embedding"]) == 7
     assert {segment["role"] for segment in client.segments} == {
         "apple_section",
         "apple_segment",

@@ -35,3 +35,6 @@ taghag-overlay-installation-report.txt
 # Local caches
 tools/tags_cache.json
 archive/raw_dumps/172_utf8.txt
+
+# Local raw capture dumps
+archive/raw_dumps/*.har

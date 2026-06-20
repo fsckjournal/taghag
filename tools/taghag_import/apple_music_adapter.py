@@ -10,7 +10,7 @@ from .apple_derived_features import compute_derived_features
 from .apple_hybrid_vector import build_apple_hybrid_embedding_row
 from .db_client import TaghagDbClient
 from .flac import probe_flac, sha256_file
-from .mik_xml_adapter import get_mik_bpm
+from .mik_xml_adapter import get_mik_bpm, get_mik_energy_shifts
 
 SWIFT_CLI_PATH = Path(__file__).parent.parent / "cuecifer-analyzer" / ".build" / "release" / "cuecifer_analyzer"
 
@@ -288,7 +288,12 @@ def run_apple_music_ingestion(
             "loudness_peak": _loudness_scalar(loudness, "peak"),
         })
 
-        derived = compute_derived_features(data, filename=path.name, reference_bpm=get_mik_bpm(path.name))
+        derived = compute_derived_features(
+            data,
+            filename=path.name,
+            reference_bpm=get_mik_bpm(path.name),
+            mik_energy_shifts=get_mik_energy_shifts(path.name),
+        )
         derived.update(
             {
                 "owner_user_id": owner_user_id,

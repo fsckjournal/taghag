@@ -5,18 +5,21 @@ from taghag_import.apple_hybrid_vector import (
     APPLE_HYBRID_DIMENSIONS,
     APPLE_HYBRID_VECTOR_SCHEMA,
     build_apple_hybrid_embedding_row,
+    build_apple_hybrid_vector,
 )
 
 
 def test_build_apple_hybrid_embedding_row_is_interpretable_and_pgvector_compatible() -> None:
+    # Real-scale pace values (events/min-ish, not pre-normalized) -- see
+    # PACE_NORM_DIVISOR in apple_hybrid_vector.py.
     row = build_apple_hybrid_embedding_row(
         owner_user_id="owner-1",
         audio_file_id="audio-1",
         source_analysis_id="run-1",
         features={
             "apple_bpm": 124.0,
-            "pace_mean": 0.72,
-            "pace_volatility": 0.18,
+            "pace_mean": 21.8,
+            "pace_volatility": 9.14,
             "vocal_intensity_mean": 0.2,
             "drum_intensity_mean": 0.9,
             "bass_intensity_mean": 0.6,
@@ -30,24 +33,43 @@ def test_build_apple_hybrid_embedding_row_is_interpretable_and_pgvector_compatib
     assert row["vector_schema"] == APPLE_HYBRID_VECTOR_SCHEMA
     assert row["producer_vibes_json"] == list(APPLE_HYBRID_DIMENSIONS)
     assert row["dynamic_evolution"] is True
-    assert row["evolution_delta"] == 0.18
+    assert row["evolution_delta"] == 0.2285
     assert len(row["embedding"]) == 7
-    assert row["embedding"] == [0.62, 0.72, 0.18, 0.2, 0.9, 0.6, 0.4]
+    assert row["embedding"] == [0.62, 0.545, 0.2285, 0.2, 0.9, 0.6, 0.4]
+
+
+def test_build_apple_hybrid_vector_does_not_saturate_on_real_scale_pace() -> None:
+    # Regression guard for the saturation bug: un-normalized real pace values
+    # used to clip straight to 1.0, making every energetic track look identical.
+    vector = build_apple_hybrid_vector(
+        {
+            "apple_bpm": 135.0,
+            "pace_mean": 21.8,
+            "pace_volatility": 9.14,
+            "vocal_intensity_mean": 0.009,
+            "drum_intensity_mean": 0.79,
+            "bass_intensity_mean": 0.35,
+            "loudness_range_db": 5.67,
+        }
+    )
+    assert vector[1] < 1.0
+    assert vector[2] < 1.0
 
 
 def test_score_apple_transition_penalizes_vocals_loudness_pace_and_non_phrase_cuts() -> None:
+    # Real-scale pace values (events/min-ish), not pre-normalized.
     good = score_apple_transition(
         {
-            "pace_mean": 0.66,
-            "pace_volatility": 0.08,
+            "pace_mean": 16.5,
+            "pace_volatility": 4.0,
             "vocal_intensity_mean": 0.0,
             "loudness_integrated": -11.0,
             "bpm_agreement_score": 0.96,
             "key_stable": True,
         },
         {
-            "pace_mean": 0.68,
-            "pace_volatility": 0.09,
+            "pace_mean": 17.5,
+            "pace_volatility": 4.5,
             "vocal_intensity_mean": 0.1,
             "loudness_integrated": -10.5,
             "bpm_agreement_score": 0.95,
@@ -58,16 +80,16 @@ def test_score_apple_transition_penalizes_vocals_loudness_pace_and_non_phrase_cu
     )
     risky = score_apple_transition(
         {
-            "pace_mean": 0.42,
-            "pace_volatility": 0.4,
+            "pace_mean": 10.0,
+            "pace_volatility": 14.0,
             "vocal_intensity_mean": 0.9,
             "loudness_integrated": -23.0,
             "bpm_agreement_score": 0.62,
             "key_stable": False,
         },
         {
-            "pace_mean": 0.9,
-            "pace_volatility": 0.28,
+            "pace_mean": 28.0,
+            "pace_volatility": 9.0,
             "vocal_intensity_mean": 0.8,
             "loudness_integrated": -7.0,
             "bpm_agreement_score": 0.7,

@@ -17,6 +17,7 @@ APPLE_DISAGREEMENT_FIELDS = (
     "legacy_key",
     "key_stable",
     "bpm_agreement_score",
+    "energy_agreement_score",
     "issue_codes",
 )
 
@@ -61,6 +62,10 @@ def build_apple_disagreement_rows(
         if bpm_agreement_score is not None and bpm_agreement_score < agreement_threshold:
             issue_codes.append("low_bpm_agreement_score")
 
+        energy_agreement_score = _number_or_none(apple.get("energy_agreement_score"))
+        if energy_agreement_score is not None and energy_agreement_score < agreement_threshold:
+            issue_codes.append("low_energy_agreement_score")
+
         if apple.get("key_stable") is False:
             issue_codes.append("apple_key_unstable")
 
@@ -79,6 +84,7 @@ def build_apple_disagreement_rows(
                 "legacy_key": dj_tag.get("musical_key"),
                 "key_stable": apple.get("key_stable"),
                 "bpm_agreement_score": bpm_agreement_score,
+                "energy_agreement_score": energy_agreement_score,
                 "issue_codes": issue_codes,
             }
         )
@@ -99,7 +105,7 @@ def load_apple_disagreement_rows(
             {
                 "select": (
                     "audio_file_id,apple_bpm,apple_key,key_stable,"
-                    "bpm_agreement_score,computed_at"
+                    "bpm_agreement_score,energy_agreement_score,computed_at"
                 ),
                 "owner_user_id": f"eq.{owner_user_id}",
                 "order": "computed_at.desc",

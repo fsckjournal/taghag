@@ -34,3 +34,7 @@ taghag-overlay-installation-report.txt
 
 # Local caches
 tools/tags_cache.json
+
+# Local Rekordbox/MIK XML exports (machine-specific working files, not repo content)
+/downloaded.xml
+/rekordbox_mikcues_001.xml

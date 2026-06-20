@@ -18,6 +18,7 @@ def compute_derived_features(
     raw_json: dict[str, Any],
     filename: str = "",
     reference_bpm: float | None = None,
+    mik_energy_shifts: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """Compute all derived features from a single cuecifer JSON payload.
 
@@ -41,18 +42,7 @@ def compute_derived_features(
 
     if key_ranges:
         first_key = key_ranges[0].get("value", {})
-        pitch_class = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
-        mode_class = ["Major", "Minor"]
-        tonic = first_key.get("tonic", -1)
-        mode = first_key.get("mode", -1)
-        try:
-            t, m = int(tonic), int(mode)
-            if 0 <= t < 12 and 0 <= m < 2:
-                features["apple_key"] = f"{pitch_class[t]} {mode_class[m]}"
-            else:
-                features["apple_key"] = None
-        except (ValueError, TypeError):
-            features["apple_key"] = None
+        features["apple_key"] = _format_key(first_key.get("tonic"), first_key.get("mode"))
     else:
         features["apple_key"] = None
 
@@ -101,6 +91,8 @@ def compute_derived_features(
         features["pace_max"] = None
         features["pace_min"] = None
 
+    features["energy_agreement_score"] = _energy_agreement_score(mik_energy_shifts, pace_ranges)
+
     # --- Structure ---
     structure = raw_json.get("structure") or {}
     sections = structure.get("sections", [])
@@ -143,6 +135,38 @@ def compute_derived_features(
 
 
 # --- Helpers ---
+
+def _format_key(tonic: Any, mode: Any) -> str | None:
+    """Map Apple's string-encoded tonic/mode (e.g. "e"/"minor") to a readable key name.
+
+    Only a natural-note sample ("e"/"minor") has been observed from real
+    output so far. Accidentals are inferred ("sharp"/"#" -> "#", "flat"/"b"
+    -> "b"); anything else is left as None rather than guessed.
+    """
+    if not isinstance(tonic, str) or not isinstance(mode, str):
+        return None
+
+    tonic_norm = tonic.strip().lower()
+    mode_norm = mode.strip().lower()
+    if mode_norm not in ("major", "minor") or not tonic_norm:
+        return None
+
+    letter = tonic_norm[0].upper()
+    if letter not in "ABCDEFG":
+        return None
+
+    suffix = tonic_norm[1:]
+    if suffix == "":
+        accidental = ""
+    elif "sharp" in suffix or "#" in suffix:
+        accidental = "#"
+    elif "flat" in suffix or "b" in suffix:
+        accidental = "b"
+    else:
+        return None
+
+    return f"{letter}{accidental} {mode_norm.capitalize()}"
+
 
 def _extract_value(timed_value: Any) -> float | None:
     """Extract float value from Apple TimedValue/RangedValue-like dicts."""
@@ -227,6 +251,82 @@ def _bpm_agreement_score(apple_bpm: float | None, reference_bpm: float | None) -
         return None
     relative_error = abs(apple - reference) / max(apple, reference)
     return round(max(0.0, 1.0 - (relative_error / 0.10)), 3)
+
+
+def _pace_intervals(pace_ranges: list[Any]) -> list[tuple[float, float, float]]:
+    """Build (start_s, end_s, value) intervals from Apple's piecewise-constant pace ranges."""
+    intervals: list[tuple[float, float, float]] = []
+    for ranged in pace_ranges:
+        if not isinstance(ranged, dict):
+            continue
+        range_data = ranged.get("range")
+        if not isinstance(range_data, dict):
+            continue
+        start = _cmtime_seconds(range_data.get("start"))
+        duration = _cmtime_seconds(range_data.get("duration"))
+        value = _extract_value(ranged)
+        if start is None or duration is None or value is None:
+            continue
+        intervals.append((start, start + duration, value))
+    intervals.sort(key=lambda interval: interval[0])
+    return intervals
+
+
+def _pace_value_at(intervals: list[tuple[float, float, float]], time_s: float) -> float | None:
+    """Apple's pace value covering time_s; clamps to the nearest interval at the edges."""
+    if not intervals:
+        return None
+    for start, end, value in intervals:
+        if start <= time_s < end:
+            return value
+    if time_s < intervals[0][0]:
+        return intervals[0][2]
+    return intervals[-1][2]
+
+
+def _energy_agreement_score(
+    mik_energy_shifts: list[dict[str, Any]] | None,
+    pace_ranges: list[Any],
+) -> float | None:
+    """Direction-agreement between MIK's manual energy cues and Apple's automatic pace curve.
+
+    For each consecutive pair of MIK "Energy N" cues, checks whether Apple's
+    pace value also rose or fell between those same two timestamps. This is
+    a second, independent cross-check alongside bpm_agreement_score: one
+    compares Apple's tempo against Rekordbox's, this compares Apple's
+    automatic intensity curve against a human's manual energy curation.
+    Returns the fraction of compared transitions that agree, or None if
+    there's nothing to compare (fewer than 2 cues, no pace data, or every
+    transition was flat on one side).
+    """
+    if not mik_energy_shifts or len(mik_energy_shifts) < 2:
+        return None
+
+    intervals = _pace_intervals(pace_ranges)
+    if not intervals:
+        return None
+
+    shifts_sorted = sorted(mik_energy_shifts, key=lambda shift: shift.get("time_s", 0.0))
+    compared = 0
+    agreements = 0
+    for prev_cue, curr_cue in zip(shifts_sorted, shifts_sorted[1:]):
+        energy_delta = curr_cue.get("energy", 0) - prev_cue.get("energy", 0)
+        if energy_delta == 0:
+            continue
+        prev_pace = _pace_value_at(intervals, prev_cue.get("time_s", 0.0))
+        curr_pace = _pace_value_at(intervals, curr_cue.get("time_s", 0.0))
+        if prev_pace is None or curr_pace is None:
+            continue
+        pace_delta = curr_pace - prev_pace
+        if pace_delta == 0:
+            continue
+        compared += 1
+        if (energy_delta > 0) == (pace_delta > 0):
+            agreements += 1
+
+    if compared == 0:
+        return None
+    return round(agreements / compared, 3)
 
 
 def compute_features_from_file(json_path: Path, filename: str = "") -> dict[str, Any] | None:

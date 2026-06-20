@@ -3,6 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Mapping
 
+from .apple_hybrid_vector import PACE_NORM_DIVISOR
+
 APPLE_TRANSITION_WEIGHTS = {
     "pace_delta": 2.0,
     "pace_volatility": 0.8,
@@ -34,9 +36,13 @@ def score_apple_transition(
         return AppleTransitionScore(total_cost=0.0, terms={})
 
     terms = {
-        "pace_delta": _clip(abs(_number(from_features.get("pace_mean")) - _number(to_features.get("pace_mean")))),
+        "pace_delta": _clip(
+            abs(_number(from_features.get("pace_mean")) - _number(to_features.get("pace_mean"))) / PACE_NORM_DIVISOR
+        ),
         "pace_volatility": _clip(
-            (_number(from_features.get("pace_volatility")) + _number(to_features.get("pace_volatility"))) / 2.0
+            (_number(from_features.get("pace_volatility")) + _number(to_features.get("pace_volatility")))
+            / 2.0
+            / PACE_NORM_DIVISOR
         ),
         "vocal_overlap_risk": _clip(
             _number(from_features.get("vocal_intensity_mean"))

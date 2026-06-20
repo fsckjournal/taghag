@@ -89,6 +89,7 @@ def test_apple_ingestion_uploads_raw_runs_derived_features_segments_and_cues(
     monkeypatch.setattr(apple_music_adapter, "sha256_file", lambda path: "filehash")
     monkeypatch.setattr(apple_music_adapter, "analyze_flac", lambda path: _apple_payload())
     monkeypatch.setattr(apple_music_adapter, "get_mik_bpm", lambda filename: 125.0)
+    monkeypatch.setattr(apple_music_adapter, "get_mik_energy_shifts", lambda filename: [])
 
     summary = apple_music_adapter.run_apple_music_ingestion(client, "owner-1", [flac])
 

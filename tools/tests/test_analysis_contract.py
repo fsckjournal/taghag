@@ -20,8 +20,8 @@ def test_compute_derived_features_preserves_apple_phase_four_scalars() -> None:
         },
         "key": {
             "ranges": [
-                {"value": {"tonic": 0, "mode": 0}},
-                {"value": {"tonic": 7, "mode": 0}},
+                {"value": {"tonic": "c", "mode": "major"}},
+                {"value": {"tonic": "g", "mode": "major"}},
             ]
         },
         "loudness": {

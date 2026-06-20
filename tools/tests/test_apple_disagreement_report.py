@@ -44,3 +44,26 @@ def test_build_apple_disagreement_rows_flags_bpm_confidence_and_unstable_key() -
         "low_bpm_agreement_score",
         "apple_key_unstable",
     ]
+
+
+def test_build_apple_disagreement_rows_flags_low_energy_agreement() -> None:
+    rows = build_apple_disagreement_rows(
+        apple_rows=[
+            {
+                "audio_file_id": "audio-1",
+                "apple_bpm": 128.0,
+                "apple_key": "C Major",
+                "key_stable": True,
+                "bpm_agreement_score": 0.96,
+                "energy_agreement_score": 0.25,
+            },
+        ],
+        dj_tag_rows=[{"audio_file_id": "audio-1", "bpm": 127.8, "musical_key": "8A"}],
+        audio_file_rows=[{"id": "audio-1", "path": "/music/ok.flac", "filename": "ok.flac"}],
+        bpm_threshold_pct=2.0,
+        agreement_threshold=0.8,
+    )
+
+    assert len(rows) == 1
+    assert rows[0]["energy_agreement_score"] == 0.25
+    assert rows[0]["issue_codes"] == ["low_energy_agreement_score"]

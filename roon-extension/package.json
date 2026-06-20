@@ -1,0 +1,21 @@
+{
+  "name": "roon-extension",
+  "version": "0.1.0",
+  "description": "Roon Settings bridge for the Cuecifer Autonomous Intelligence Engine.",
+  "main": "app.js",
+  "scripts": {
+    "start": "node app.js",
+    "check": "node --check app.js",
+    "test": "npm run check"
+  },
+  "keywords": [],
+  "author": "Tagslut",
+  "license": "MIT",
+  "type": "commonjs",
+  "dependencies": {
+    "node-roon-api": "github:RoonLabs/node-roon-api",
+    "node-roon-api-settings": "github:RoonLabs/node-roon-api-settings",
+    "node-roon-api-status": "github:RoonLabs/node-roon-api-status",
+    "node-roon-api-transport": "github:RoonLabs/node-roon-api-transport"
+  }
+}

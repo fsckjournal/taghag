@@ -386,7 +386,7 @@ Phases 1 through 7 are now represented in the Taghag codebase. The Swift
 stores raw runs, normalized curves, derived scalars, Apple segments, and Apple
 cues, and `apple_hybrid_vector.py` upserts `apple_hybrid_v1` vectors into the
 existing seven-dimensional `track_embedding` table. Butter Flow keeps the
-legacy cue/vector fallback but now also uses `apple_butterflow.py` to score
+legacy cue/vector fallback but now also uses `apple_handoff.py` to score
 Apple-derived phrase-boundary, pace, vocal-overlap, loudness-handoff,
 BPM-disagreement, and key-stability risks when `apple_derived_features` rows
 are available. `apple_disagreement_report.py` and `taghag-import apple-audit`

@@ -28,7 +28,7 @@ def score_apple_transition(
     to_segment: Mapping[str, Any] | None = None,
     weights: Mapping[str, float] | None = None,
 ) -> AppleTransitionScore:
-    """Score Apple-derived transition risks for Butter Flow planning."""
+    """Score Apple-derived risk terms for handing off from one track to the next."""
 
     if not from_features or not to_features:
         return AppleTransitionScore(total_cost=0.0, terms={})

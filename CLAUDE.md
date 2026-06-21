@@ -58,7 +58,7 @@ taghag/
 
 3. **Sonic Similarity & Generative Crates** (`cuecifer/`):
    - Similarity search over `sonic7_v1` + `apple_hybrid_v1` vectors
-   - Harmonic transition scoring (Butterflow: pace delta, vocal overlap, loudness, BPM disagreement, key instability)
+   - Harmonic transition scoring (pace delta, vocal overlap, loudness, BPM disagreement, key instability)
    - Seed track → neighborhood → crate
 
 4. **Identity Resolution**:
@@ -206,7 +206,7 @@ taghag-import provider-evidence \
 | --- | --- | --- |
 | **CLI** | Command-line interface | `cli.py` (main entry) |
 | **Apple Analysis** | MIR extraction & feature engineering | `apple_*.py` (5 files) |
-| **Cuecifer** | Sonic similarity & harmonic mixing | `cuecifer/`, `apple_butterflow.py` |
+| **Cuecifer** | Sonic similarity & harmonic mixing | `cuecifer/`, `apple_handoff.py` |
 | **Audio Audit** | Metadata extraction & quality checking | `audio_audit.py`, `audio_probe.py` |
 | **Provider Evidence** | ISRC lookups via Postman | `beatport_*.py`, `provider_evidence.py` |
 | **Tests** | pytest suite | `tools/tests/test_*.py` |

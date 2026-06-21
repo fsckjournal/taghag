@@ -13,7 +13,7 @@ from psycopg2.extras import RealDictCursor
 
 from .config import read_database_config
 from .db_client import TaghagDbClient
-from .apple_butterflow import score_apple_transition
+from .apple_handoff import score_apple_transition
 
 # Defensive imports for librosa/numpy
 try:

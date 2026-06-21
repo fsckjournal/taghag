@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from taghag_import.apple_butterflow import score_apple_transition
+from taghag_import.apple_handoff import score_apple_transition
 from taghag_import.apple_hybrid_vector import (
     APPLE_HYBRID_DIMENSIONS,
     APPLE_HYBRID_VECTOR_SCHEMA,

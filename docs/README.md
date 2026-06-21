@@ -30,7 +30,6 @@ Contains deep-dive technical reports, intelligence engine whitepapers, and phase
 ## 📂 `management/`
 Contains project planning and historical milestone briefs.
 - `manifest_stage_plan.md` - Implementation plan for the manifest stage.
-- `project_brief.md` - The original Gemini Project Brief.
 - `taghag_stage_pipeline_plan.md` - Implementation plan for the stage pipeline.
 
 ## 📂 `archive/`
@@ -40,3 +39,7 @@ Contains historically obsolete execution plans and legacy MP3/Rekordbox-era desi
 Contains troubleshooting, operational references, and issue resolution guides.
 - `migration_reference.md` - Guidelines and SQL references for executing Supabase migrations.
 - `roon_identification_failure_fix.md` - RCA and fix guide for the Roon "Paper Cuts #1" identification failure.
+
+## 📂 `audit/`
+Contains audit reports and assessment documents.
+- `2026-06-21-tagslut-taghag-opus-product-assessment.md` - Product assessment and system integration audit.

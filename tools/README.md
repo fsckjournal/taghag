@@ -1,30 +1,30 @@
 # Taghag Import Tooling
 
-Standalone MP3-focused import tooling for the Taghag clean-room metadata app.
+FLAC-focused import tooling for the Taghag clean-room audio intelligence app.
 
-## Audit MP3 metadata and quality
+## Audit FLAC metadata and quality
 
 ```bash
-taghag-import audit-mp3 \
-  --root /path/to/mp3s \
-  --output-dir ../artifacts/mp3_audit/manual-check
+taghag-import audit-flac \
+  --root /path/to/flacs \
+  --output-dir ../artifacts/audio_audit/manual-check
 ```
 
-The command writes `mp3_audit.jsonl`, `mp3_audit.csv`, and `summary.json`.
-Reports contain ID3 and technical metadata only, including duration, bitrate,
+The command writes `audio_audit.jsonl`, `audio_audit.csv`, and `summary.json`.
+Reports contain Vorbis comment metadata and technical audio data only, including duration, bitrate,
 sample rate, channels, codec, decode status, and issue codes.
 
-## Dump and selectively write ID3 tags
+## Dump and selectively write Vorbis tags
 
 ```bash
-taghag-import dump-tags --root /path/to/mp3s --out ../artifacts/mp3_tags.jsonl
+taghag-import dump-tags --root /path/to/flacs --out ../artifacts/flac_tags.jsonl
 taghag-import write-tags --plan /path/to/path-field-value.csv
 ```
 
 `write-tags` requires CSV columns `path,field,value`. It is dry-run by default;
 add `--execute` to save and `--force` to replace requested non-empty fields.
-Unknown ID3 frames and comments are preserved. Taghag does not write receipt,
-debug, or provenance text into MP3 comments.
+Unknown Vorbis frames and comments are preserved. Taghag does not write receipt,
+debug, or provenance text into FLAC comments.
 
 ## Collect provider evidence
 
@@ -43,7 +43,7 @@ unchanged to:
 
 ```bash
 taghag-import import-batch \
-  --root /path/to/mp3s \
+  --root /path/to/flacs \
   --postman-evidence ../artifacts/provider_evidence/manual-check/provider_evidence.log \
   --no-upload
 ```
@@ -51,14 +51,16 @@ taghag-import import-batch \
 Use `--isrc-file` and `--prepare-only` to validate a long batch without
 launching Postman. The operator can then run the verified command directly.
 
-## Backfill the legacy DJ slice
+## Backfill historical tag data
+
+#TODO: Rename legacy backfill commands and database tables to remove "DJ" branding.
 
 ```bash
 taghag-import extract-dj-slice --sqlite-db /path/to/music_v3.db --verbose
 ```
 
 This command reads the legacy SQLite snapshot in read-only mode and upserts
-matching rows into `audio_file` and `dj_tag`. It requires a Postgres connection
+matching rows into `audio_file` and tag tables. It requires a Postgres connection
 string via `DB_POSTGRES_URL` or `TAGHAG_DB_POSTGRES_URL` plus
 `TAGHAG_OWNER_USER_ID`.
 
@@ -76,29 +78,27 @@ Without `--dry-run`, the command uploads raw Apple run provenance,
 and beat/bar cues for tracks already registered in `audio_file`. The local FLAC
 is never uploaded.
 
-## Transcode local FLACs
+## Transcode to lossy formats (optional)
 
 ```bash
 taghag-import transcode \
   --source /path/to/flacs \
-  --output /path/to/local/mp3s \
+  --output /path/to/lossy-copies \
   --dry-run
 ```
 
-Remove `--dry-run` to write mirrored 320 kbps MP3 files. The command is
+Remove `--dry-run` to write mirrored 320 kbps lossy copies. The command is
 filesystem-only and does not initialize a database client. It prints every
 transcode and existing-file skip by default; use `--quiet` for summary only.
 
-For validation, decoded-audio dedupe, transcode, MP3 verification, reports, and
+For validation, decoded-audio dedupe, staging, verification, reports, and
 a receipt in one database-free operation:
 
 ```bash
 taghag-import stage --source /path/to/flacs --output /path/to/taghag-batch
 ```
 
-The discovery layer also recognizes `.m3u` and `.m3u8` playlist files alongside MP3s and
-out-of-scope audio, so they are tracked explicitly instead of being silently
-ignored.
+The discovery layer also recognizes `.m3u` and `.m3u8` playlist files alongside FLACs, so they are tracked explicitly instead of being silently ignored.
 
 ## Stage an explicit FLAC manifest
 

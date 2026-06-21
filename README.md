@@ -1,10 +1,10 @@
 # Taghag
 
-Taghag is a clean-room, FLAC-native private DJ metadata app. It keeps audio files on local disks and stores only metadata, tagging decisions, crate organization, and import receipts in the database.
+Taghag is a clean-room, FLAC-native audio intelligence system. It keeps audio files on local disks and stores only metadata, tagging decisions, crate organization, and import receipts in the database.
 
 ## What Taghag is
 
-Taghag is a private control surface for DJs who want to scan local audio libraries, normalize metadata, review tag evidence, and organize tracks into crates and saved views.
+Taghag scans local audio libraries, normalizes metadata, reviews tag evidence, and organizes tracks into crates and saved views.
 
 ## What it refuses to inherit
 
@@ -16,7 +16,7 @@ Taghag strictly accepts `.flac` files. All local staging, deduplication, and dat
 
 ## Metadata-only database model
 
-The database stores import runs, audio file metadata, DJ tags, tag evidence, quality checks, crates, crate membership, and saved views. It does not store binary audio assets.
+The database stores import runs, audio file metadata, tags, tag evidence, quality checks, crates, crate membership, and saved views. It does not store binary audio assets.
 
 ## Local files remain local
 
@@ -26,7 +26,9 @@ Taghag never uploads or deletes local audio files. Import receipts reference loc
 
 The importer reads server-side upload credentials from environment variables only. Frontend code must use frontend-safe variables only and must never embed a server-only key.
 
-The legacy DJ-slice backfill extractor also needs a Postgres connection string in `DB_POSTGRES_URL` or `TAGHAG_DB_POSTGRES_URL` so it can write through `psycopg2`.
+A legacy backfill extractor for migrating historical tag data also needs a Postgres connection string in `DB_POSTGRES_URL` or `TAGHAG_DB_POSTGRES_URL` so it can write through `psycopg2`.
+
+#TODO: Rename legacy backfill commands and database tables to remove "DJ" branding.
 
 ## Source-controlled migrations
 
@@ -93,9 +95,9 @@ Upload uses the server-side Taghag env vars from [.env.example](/Users/g/Project
 taghag-import import-batch --root /path/to/audio-library --run-name first-import
 ```
 
-## Legacy DJ slice backfill
+## Legacy tag data backfill
 
-Extract the core FLAC DJ slice from a legacy `music_v3.db` snapshot and upsert it into the clean-room `audio_file` and `dj_tag` tables:
+Extract historical tag data from a legacy `music_v3.db` snapshot and upsert it into the clean-room `audio_file` and tag tables:
 
 ```bash
 cd tools

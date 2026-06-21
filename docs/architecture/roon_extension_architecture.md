@@ -2,6 +2,8 @@
 
 Date: 2026-06-15
 
+> ⚠️ **Tagslut (Backbone) Architecture** — This document describes Tagslut's local-first design with SQLite as the source of truth. Taghag (Brain) uses Supabase/PostgreSQL + pgvector for distributed metadata and embeddings; see [CLAUDE.md](../../CLAUDE.md) for Taghag's current architecture. The two systems are designed to coexist: Tagslut as the identity and file authority, Taghag as the audio-understanding layer.
+
 ## 1. Executive Summary
 
 This document details the architecture of the Tagslut/Taghag ecosystem as a home music library intelligence system: a localized, fully decoupled platform for audiophile music curation and discovery.

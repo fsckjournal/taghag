@@ -9,8 +9,9 @@ from typing import Any, Iterable
 
 from .audio_probe import probe_flac
 from .discover import DiscoveryRecord, discover_audio_files
+from .flac import extract_flac_tags
 from .genre import classify_genre
-from .tags import extract_flac_tags
+from .provider_runner import normalize_isrc
 
 
 MISSING_TAG_ISSUES = {
@@ -70,11 +71,31 @@ def default_audit_output_dir() -> Path:
     return Path("artifacts") / "audio_audit" / _timestamp()
 
 
+def is_malformed_isrc(value: object) -> bool:
+    """True when a tag's ISRC value is not exactly one well-formed ISRC.
+
+    Legacy Picard passes sometimes concatenated several historical ISRCs into
+    one semicolon-joined tag value. Acquisition-time tagging always yields a
+    single valid ISRC, so anything that fails strict normalization is treated
+    as untrustworthy rather than salvaged.
+    """
+    text = str(value or "").strip()
+    if not text:
+        return False
+    try:
+        normalize_isrc(text)
+    except ValueError:
+        return True
+    return False
+
+
 def metadata_issue_codes(
     tags: dict[str, Any],
     canonical: dict[str, object],
 ) -> list[str]:
     issues = [issue for field, issue in MISSING_TAG_ISSUES.items() if not tags.get(field)]
+    if is_malformed_isrc(tags.get("isrc")):
+        issues.append("malformed_isrc")
     if not tags.get("genre") and not canonical.get("canonical_genre"):
         issues.append("missing_genre")
     if not tags.get("subgenre") and not canonical.get("canonical_subgenre"):

@@ -142,6 +142,92 @@ def compute_derived_features(
     return features
 
 
+def extract_structure_boundaries(raw_json: dict[str, Any]) -> list[dict]:
+    """Absolute section/phrase boundaries in Apple CMTime milliseconds, role-tagged.
+
+    Unlike ``compute_derived_features`` (which keeps only counts and intro/outro
+    durations), this preserves the *absolute* start/end position of every section
+    and phrase. Positions are in Apple's CMTime base = the artifact identified by
+    ``apple_derived_features.source_artifact_sha256``.
+
+    Apple's structure payload carries no per-section "kind"/type field (the
+    analyzer serializes ``MusicUnderstandingSession`` results, and sections are
+    bare ``{range:{start,duration}}`` entries). So role is inferred positionally:
+    first section -> 'intro', last section -> 'outro', other sections -> 'phrase',
+    and every entry under ``phrases`` -> 'phrase'. If a future payload ever does
+    carry a section "kind"/"type" string, it is honored verbatim.
+    """
+    if not isinstance(raw_json, dict):
+        return []
+    structure = raw_json.get("structure") or {}
+    if not isinstance(structure, dict):
+        return []
+
+    boundaries: list[dict] = []
+
+    sections = structure.get("sections") or []
+    if isinstance(sections, list):
+        last_idx = len(sections) - 1
+        for idx, section in enumerate(sections):
+            if not isinstance(section, dict):
+                continue
+            bounds = _boundary_ms(section)
+            if bounds is None:
+                continue
+            start_ms, end_ms = bounds
+            kind = _section_kind(section)
+            if kind is not None:
+                role = kind
+            elif idx == 0:
+                role = "intro"
+            elif idx == last_idx:
+                role = "outro"
+            else:
+                role = "phrase"
+            boundaries.append(
+                {"role": role, "level": "section", "start_ms": start_ms, "end_ms": end_ms}
+            )
+
+    phrases = structure.get("phrases") or []
+    if isinstance(phrases, list):
+        for phrase in phrases:
+            if not isinstance(phrase, dict):
+                continue
+            bounds = _boundary_ms(phrase)
+            if bounds is None:
+                continue
+            start_ms, end_ms = bounds
+            boundaries.append(
+                {"role": "phrase", "level": "phrase", "start_ms": start_ms, "end_ms": end_ms}
+            )
+
+    return boundaries
+
+
+def _section_kind(section: dict) -> str | None:
+    """Return a declared section kind/type string if the payload carries one."""
+    for field in ("kind", "type", "label"):
+        value = section.get(field)
+        if isinstance(value, str) and value.strip():
+            return value.strip().lower()
+    return None
+
+
+def _boundary_ms(entry: dict) -> tuple[int, int] | None:
+    """Absolute (start_ms, end_ms) from a CMTimeRange-bearing entry, or None."""
+    range_data = entry.get("range", entry)
+    if not isinstance(range_data, dict):
+        return None
+    start_seconds = _cmtime_seconds(range_data.get("start"))
+    if start_seconds is None:
+        return None
+    start_ms = int(start_seconds * 1000)
+    duration_ms = _range_duration_ms(entry)
+    if duration_ms is None:
+        return None
+    return start_ms, start_ms + duration_ms
+
+
 # --- Helpers ---
 
 def _extract_value(timed_value: Any) -> float | None:

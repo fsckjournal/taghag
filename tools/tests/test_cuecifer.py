@@ -214,37 +214,18 @@ def test_generate_map_writes_json_and_csv(tmp_path: Path, monkeypatch) -> None:
     assert records[0]["vibe"] == "peak_time_house"
 
 
-def test_sync_vibes_to_file_rewrites_existing_comment(tmp_path: Path, monkeypatch) -> None:
-    class FakeFrame:
-        def __init__(self, text: str) -> None:
-            self.desc = ""
-            self.text = [text]
+def test_sync_vibes_to_file_rewrites_existing_comment(real_flac_factory) -> None:
+    flac_path = real_flac_factory({"comment": "prefix [TS: old_vibe] suffix"})
 
-    class FakeAudio:
-        def __init__(self) -> None:
-            self.frames = [FakeFrame("prefix [TS: old_vibe] suffix")]
-            self.saved = False
+    changed = sync_vibes.sync_vibes_to_file(flac_path, ["peak_time_house", "warm_dancefloor"], dry_run=False)
 
-        def getall(self, kind: str):
-            return self.frames
-
-        def add(self, frame) -> None:
-            self.frames.append(frame)
-
-        def save(self, path, v2_version: int) -> None:
-            self.saved = True
-
-    fake_audio = FakeAudio()
-    mp3_path = tmp_path / "track.flac"
-    mp3_path.write_bytes(b"")
-
-    monkeypatch.setattr(sync_vibes, "ID3", lambda path=None: fake_audio)
-
-    changed = sync_vibes.sync_vibes_to_file(mp3_path, ["peak_time_house", "warm_dancefloor"], dry_run=False)
-
+    from mutagen.flac import FLAC
+    audio = FLAC(flac_path)
+    comment = audio["comment"][0]
     assert changed is True
-    assert fake_audio.saved is True
-    assert "peak_time_house | warm_dancefloor" in fake_audio.frames[0].text[0]
+    assert "peak_time_house | warm_dancefloor" in comment
+    assert "old_vibe" not in comment
+    assert "prefix" in comment
 
 
 def test_apply_corrections_upserts_track_curation(tmp_path: Path, monkeypatch) -> None:

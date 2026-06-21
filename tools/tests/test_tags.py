@@ -2,59 +2,55 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from mutagen.id3 import APIC, COMM, ID3, TBPM, TDRC, TIT2, TPE1, TXXX
+import pytest
+from mutagen.flac import FLAC, Picture
 
 from taghag_import.tags import apply_flac_tag_updates, dump_flac_tags, extract_flac_tags
+from taghag_import.flac import extract_flac_tags as production_reader
 
 
-def _tagged_mp3(path: Path) -> None:
-    path.write_bytes(b"")
-    tags = ID3()
-    tags.add(TIT2(encoding=3, text=["Original Title"]))
-    tags.add(TPE1(encoding=3, text=["Original Artist"]))
-    tags.add(COMM(encoding=3, lang="eng", desc="", text=["8 Energy"]))
-    tags.add(TXXX(encoding=3, desc="CUSTOM_KEEP", text=["keep me"]))
-    tags.add(APIC(encoding=3, mime="image/jpeg", type=3, desc="Cover", data=b"jpeg"))
-    tags.save(path)
+def test_dump_flac_tags_summarizes_picture_frames(real_flac_factory) -> None:
+    flac_path = real_flac_factory({"title": "Orig", "artist": "A"})
+    audio = FLAC(flac_path)
+    pic = Picture()
+    pic.type = 3
+    pic.mime = "image/jpeg"
+    pic.desc = "Cover"
+    pic.data = b"jpeg"
+    audio.add_picture(pic)
+    audio.save()
 
+    dumped = dump_flac_tags(flac_path)
 
-def test_dump_flac_tags_summarizes_binary_frames(tmp_path: Path) -> None:
-    mp3 = tmp_path / "track.flac"
-    _tagged_mp3(mp3)
-
-    dumped = dump_flac_tags(mp3)
-
-    assert dumped["TIT2"] == ["Original Title"]
-    assert dumped["TXXX:CUSTOM_KEEP"] == ["keep me"]
-    assert dumped["APIC:Cover"] == ["<binary:4 bytes>"]
+    assert dumped["title"] == ["Orig"]
+    assert dumped["artist"] == ["A"]
+    assert dumped["PICTURE:Cover"] == ["<binary:4 bytes>"]
     assert b"jpeg" not in repr(dumped).encode("utf-8")
 
 
-def test_apply_flac_tag_updates_is_dry_run_by_default(tmp_path: Path) -> None:
-    mp3 = tmp_path / "track.flac"
-    _tagged_mp3(mp3)
-    before = mp3.read_bytes()
+def test_apply_flac_tag_updates_is_dry_run_by_default(real_flac_factory) -> None:
+    flac_path = real_flac_factory({"title": "Orig"})
+    before = flac_path.read_bytes()
 
     result = apply_flac_tag_updates(
-        mp3,
+        flac_path,
         {"bpm": "124", "label": "Dry Run Records"},
     )
 
     assert result.executed is False
     assert result.planned_fields == ["bpm", "label"]
     assert result.applied_fields == []
-    assert mp3.read_bytes() == before
-    tags = ID3(mp3)
-    assert "TBPM" not in tags
-    assert "TPUB" not in tags
+    assert flac_path.read_bytes() == before
+    audio = FLAC(flac_path)
+    assert not audio.get("bpm")
+    assert not audio.get("label")
 
 
-def test_apply_flac_tag_updates_preserves_existing_and_unknown_frames(tmp_path: Path) -> None:
-    mp3 = tmp_path / "track.flac"
-    _tagged_mp3(mp3)
+def test_apply_flac_tag_updates_preserves_existing_fields(real_flac_factory) -> None:
+    flac_path = real_flac_factory({"title": "Original Title"})
 
     result = apply_flac_tag_updates(
-        mp3,
+        flac_path,
         {
             "title": "Replacement Title",
             "bpm": "126",
@@ -64,52 +60,119 @@ def test_apply_flac_tag_updates_preserves_existing_and_unknown_frames(tmp_path: 
         execute=True,
     )
 
-    tags = ID3(mp3)
+    audio = FLAC(flac_path)
     assert result.planned_fields == ["bpm", "energy", "label"]
     assert result.applied_fields == ["bpm", "energy", "label"]
     assert result.skipped_fields == ["title"]
-    assert tags["TIT2"].text == ["Original Title"]
-    assert tags["TBPM"].text == ["126"]
-    assert tags["TPUB"].text == ["Selective Records"]
-    assert tags["TXXX:LABEL"].text == ["Selective Records"]
-    assert tags["TXXX:ENERGY"].text == ["7"]
-    assert tags["TXXX:CUSTOM_KEEP"].text == ["keep me"]
-    assert tags.getall("COMM")[0].text == ["8 Energy"]
-    assert tags["APIC:Cover"].data == b"jpeg"
+    assert audio["title"] == ["Original Title"]
+    assert audio["bpm"] == ["126"]
+    assert audio["label"] == ["Selective Records"]
+    assert audio["energy"] == ["7"]
 
 
-def test_apply_flac_tag_updates_force_overwrites_only_requested_field(tmp_path: Path) -> None:
-    mp3 = tmp_path / "track.flac"
-    _tagged_mp3(mp3)
-    tags = ID3(mp3)
-    tags.add(TBPM(encoding=3, text=["120"]))
-    tags.save(mp3)
+def test_apply_flac_tag_updates_force_overwrites_only_requested_field(real_flac_factory) -> None:
+    flac_path = real_flac_factory({"title": "Orig", "bpm": "120"})
 
     result = apply_flac_tag_updates(
-        mp3,
+        flac_path,
         {"title": "Forced Title"},
         execute=True,
         force=True,
     )
 
-    tags = ID3(mp3)
+    audio = FLAC(flac_path)
     assert result.applied_fields == ["title"]
-    assert tags["TIT2"].text == ["Forced Title"]
-    assert tags["TBPM"].text == ["120"]
-    assert tags["TXXX:CUSTOM_KEEP"].text == ["keep me"]
-    assert tags.getall("COMM")[0].text == ["8 Energy"]
+    assert audio["title"] == ["Forced Title"]
+    assert audio["bpm"] == ["120"]
 
 
-def test_extract_flac_tags_derives_release_date_and_year_from_date_frame(
-    tmp_path: Path,
-) -> None:
-    mp3 = tmp_path / "track.flac"
-    mp3.write_bytes(b"")
-    tags = ID3()
-    tags.add(TDRC(encoding=3, text=["2024-05-03"]))
-    tags.save(mp3)
+def test_apply_flac_tag_updates_rejects_multi_value_isrc(real_flac_factory) -> None:
+    flac_path = real_flac_factory()
 
-    extracted = extract_flac_tags(mp3)
+    with pytest.raises(ValueError, match="invalid ISRC"):
+        apply_flac_tag_updates(
+            flac_path,
+            {"isrc": "USAT21600354; USAT21601223"},
+            execute=True,
+        )
+
+
+def test_apply_flac_tag_updates_accepts_single_valid_isrc(real_flac_factory) -> None:
+    flac_path = real_flac_factory()
+
+    result = apply_flac_tag_updates(
+        flac_path,
+        {"isrc": "usabc2400001"},
+        execute=True,
+    )
+
+    audio = FLAC(flac_path)
+    assert result.applied_fields == ["isrc"]
+    assert audio["isrc"] == ["USABC2400001"]
+
+
+def test_extract_flac_tags_derives_release_date_and_year(real_flac_factory) -> None:
+    flac_path = real_flac_factory({"date": "2024-05-03"})
+
+    extracted = extract_flac_tags(flac_path)
 
     assert extracted["release_date"] == "2024-05-03"
     assert extracted["year"] == "2024"
+
+
+def test_round_trip_via_production_reader(real_flac_factory) -> None:
+    """apply_flac_tag_updates writes must be readable by flac.py's production reader."""
+    flac_path = real_flac_factory()
+
+    apply_flac_tag_updates(
+        flac_path,
+        {
+            "title": "Round Trip",
+            "artist": "RT Artist",
+            "isrc": "USABC2400001",
+            "bpm": "128",
+            "musical_key": "Am",
+            "label": "RT Label",
+            "catalog_number": "RT001",
+            "release_date": "2024-01-01",
+            "genre": "Techno",
+        },
+        execute=True,
+    )
+
+    via_prod = production_reader(flac_path)
+    assert via_prod["title"] == "Round Trip"
+    assert via_prod["artist"] == "RT Artist"
+    assert via_prod["isrc"] == "USABC2400001"
+    assert via_prod["bpm"] == "128"
+    assert via_prod["musical_key"] == "Am"
+    assert via_prod["label"] == "RT Label"
+    assert via_prod["catalog_number"] == "RT001"
+    assert via_prod["release_date"] == "2024-01-01"
+    assert via_prod["genre"] == "Techno"
+
+
+def test_round_trip_extended_fields_via_mutagen(real_flac_factory) -> None:
+    """Fields that flac.py doesn't read must round-trip through mutagen directly."""
+    flac_path = real_flac_factory()
+
+    apply_flac_tag_updates(
+        flac_path,
+        {
+            "rating": "8",
+            "energy": "9",
+            "pcm_hash": "abc123",
+            "spotify_id": "spotify:track:x",
+            "beatport_album_id": "12345",
+            "beatport_track_id": "67890",
+        },
+        execute=True,
+    )
+
+    audio = FLAC(flac_path)
+    assert audio["rating"] == ["8"]
+    assert audio["energy"] == ["9"]
+    assert audio["pcm_hash"] == ["abc123"]
+    assert audio["spotify_id"] == ["spotify:track:x"]
+    assert audio["beatport_album_id"] == ["12345"]
+    assert audio["beatport_track_id"] == ["67890"]

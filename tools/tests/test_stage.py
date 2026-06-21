@@ -33,6 +33,27 @@ def test_plan_stage_blocks_same_pcm_even_in_compilation_folder(tmp_path: Path, m
     assert blocked[0].duplicate_of == first.resolve()
 
 
+def test_plan_stage_reads_real_isrc_without_monkeypatching_extractor(
+    real_flac_factory, tmp_path: Path, monkeypatch
+) -> None:
+    source = tmp_path / "source"
+    source.mkdir()
+    flac_path = real_flac_factory(
+        {"artist": "Pitchben", "title": "Soda", "isrc": "DEM091100068"}
+    )
+    flac_path.rename(source / "track.flac")
+
+    monkeypatch.setattr("taghag_import.stage.probe_flac", lambda path: {"valid": True})
+    monkeypatch.setattr("taghag_import.stage.sha256_file", lambda path: Path(path).name)
+    monkeypatch.setattr("taghag_import.stage.pcm_sha256", lambda path: Path(path).name)
+
+    plan = plan_stage(source, tmp_path / "out")
+
+    assert len(plan.items) == 1
+    assert plan.items[0].tags["isrc"] == "DEM091100068"
+    assert plan.items[0].tags["artist"] == "Pitchben"
+
+
 def test_plan_stage_reports_metadata_match_without_blocking(tmp_path: Path, monkeypatch) -> None:
     source = tmp_path / "source"
     source.mkdir()

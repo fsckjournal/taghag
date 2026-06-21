@@ -4,7 +4,7 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 
 OUT_OF_SCOPE_AUDIO_EXTENSIONS = frozenset(
-    {".m4a", ".aac", ".wav", ".aiff", ".aif", ".alac", ".ogg", ".opus", ".wma"}
+    {".mp3", ".m4a", ".aac", ".wav", ".aiff", ".aif", ".alac", ".ogg", ".opus", ".wma"}
 )
 PLAYLIST_EXTENSIONS = frozenset({".m3u", ".m3u8"})
 JUNK_FILENAMES = frozenset({".DS_Store"})

@@ -58,7 +58,7 @@ def probe_flac(path: str | Path) -> dict[str, object]:
                 issue_codes.append("bitrate_missing")
             if isinstance(audio_stream, dict) and audio_stream.get("codec_name"):
                 codec = str(audio_stream["codec_name"]).lower()
-                if codec not in ("mp3", "flac"):
+                if codec != "flac":
                     issue_codes.append("codec_mismatch")
                 if audio_stream.get("sample_rate") is not None:
                     sample_rate_hz = int(audio_stream["sample_rate"])

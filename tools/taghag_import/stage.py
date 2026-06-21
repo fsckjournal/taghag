@@ -11,7 +11,7 @@ from .audio_probe import probe_flac
 from .flac import discover_flacs, extract_flac_tags, pcm_sha256, probe_flac, sha256_file
 from .genre import classify_genre
 from .receipt import event, write_receipt
-from .tags import compute_file_identity, extract_flac_tags
+from .tags import compute_file_identity
 from .transcode import TranscodeJob, execute_transcode_plan
 
 

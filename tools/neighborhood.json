@@ -1,0 +1,146 @@
+[
+  {
+    "position": 0,
+    "isrc": "CAU112400332",
+    "artist": "Unlimited Touch",
+    "title": "I Hear Music In the Streets (Michael Gray Remix)",
+    "bpm": 122.0,
+    "camelot": "7A",
+    "transition_cost": 0.0
+  },
+  {
+    "position": 1,
+    "isrc": "DEL020220049",
+    "artist": "Glowing Glisses",
+    "title": "On the Bridge (Larry Heard's After Dark Club Mix)",
+    "bpm": 122.0,
+    "camelot": "7A",
+    "transition_cost": 0.0
+  },
+  {
+    "position": 2,
+    "isrc": "DEL020380023",
+    "artist": "Phonique",
+    "title": "This Junk (Original Mix)",
+    "bpm": 122.0,
+    "camelot": "7A",
+    "transition_cost": 0.0
+  },
+  {
+    "position": 3,
+    "isrc": "DEL020480050",
+    "artist": "Vincenzo",
+    "title": "Nightbirds (Erotic3 Edit)",
+    "bpm": 122.0,
+    "camelot": "7A",
+    "transition_cost": 0.0
+  },
+  {
+    "position": 4,
+    "isrc": "DEL021180041",
+    "artist": "Steve Bug",
+    "title": "Do It Right (Original Mix)",
+    "bpm": 122.0,
+    "camelot": "7A",
+    "transition_cost": 0.0
+  },
+  {
+    "position": 5,
+    "isrc": "DGA052550976",
+    "artist": "Dale Move",
+    "title": "Beggin' (Main Mix)",
+    "bpm": 122.0,
+    "camelot": "7A",
+    "transition_cost": 0.0
+  },
+  {
+    "position": 6,
+    "isrc": "GB8KE2051403",
+    "artist": "Pentola",
+    "title": "Back Home (Original Mix)",
+    "bpm": 122.0,
+    "camelot": "7A",
+    "transition_cost": 0.0
+  },
+  {
+    "position": 7,
+    "isrc": "GBEWY0900074",
+    "artist": "Crazy P",
+    "title": "Caught Up (Still Going Remix)",
+    "bpm": 122.0,
+    "camelot": "7A",
+    "transition_cost": 0.0
+  },
+  {
+    "position": 8,
+    "isrc": "GBKQU2423634",
+    "artist": "Hotmood",
+    "title": "Ya Te Olvide (Original Mix)",
+    "bpm": 122.0,
+    "camelot": "7A",
+    "transition_cost": 0.0
+  },
+  {
+    "position": 9,
+    "isrc": "GBKQU2459952",
+    "artist": "Gene Farris, Laura Davie",
+    "title": "Not Giving Up (Original Mix)",
+    "bpm": 122.0,
+    "camelot": "7A",
+    "transition_cost": 0.0
+  },
+  {
+    "position": 10,
+    "isrc": "DEL020080008",
+    "artist": "Vincenzo, RaSoul",
+    "title": "Afterthoughts (Original Mix)",
+    "bpm": 121.0,
+    "camelot": "7A",
+    "transition_cost": 0.1
+  },
+  {
+    "position": 11,
+    "isrc": "GBZHR0900010",
+    "artist": "Zepp001",
+    "title": "Don't Sleep (Revenge Remix)",
+    "bpm": 121.0,
+    "camelot": "7A",
+    "transition_cost": 0.0
+  },
+  {
+    "position": 12,
+    "isrc": "US83Z2631150",
+    "artist": "Barberio",
+    "title": "Leaf Labyrinth (Extended Mix)",
+    "bpm": 121.0,
+    "camelot": "7A",
+    "transition_cost": 0.0
+  },
+  {
+    "position": 13,
+    "isrc": "USI4R0604092",
+    "artist": "Home & Garden",
+    "title": "Forever Lonely (Original)",
+    "bpm": 121.0,
+    "camelot": "7A",
+    "transition_cost": 0.0
+  },
+  {
+    "position": 14,
+    "isrc": "BE6IP2000052",
+    "artist": "DRRM",
+    "title": "Retrograda (Original Mix)",
+    "bpm": 120.0,
+    "camelot": "7A",
+    "transition_cost": 0.1
+  },
+  {
+    "position": 15,
+    "isrc": "DEL021080036",
+    "artist": "Langenberg",
+    "title": "Past Present (Original Mix)",
+    "bpm": 120.0,
+    "camelot": "7A",
+    "transition_cost": 0.0
+  }
+]

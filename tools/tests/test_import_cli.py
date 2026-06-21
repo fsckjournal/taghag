@@ -82,6 +82,61 @@ def test_import_batch_writes_receipt_before_upload_and_skips_db_on_dry_run(
     assert "upload_result" not in event_types
 
 
+def test_build_import_batch_records_reads_real_isrc_without_monkeypatching_extractor(
+    real_flac_factory, tmp_path: Path
+) -> None:
+    root = tmp_path / "music"
+    root.mkdir()
+    flac_path = real_flac_factory(
+        {"artist": "Pitchben", "title": "Soda", "isrc": "DEM091100068"}
+    )
+    flac_path.rename(root / "track.flac")
+
+    records = cli._build_import_batch_records(str(root))
+
+    audio_observed = next(r for r in records if r["event_type"] == "audio_observed")
+    assert audio_observed["dj_tag"]["isrc"] == "DEM091100068"
+    assert audio_observed["dj_tag"]["artist"] == "Pitchben"
+
+    summary = next(r for r in records if r["event_type"] == "import_run_summary")
+    assert summary["summary"]["audio_observed"] == 1
+    assert summary["summary"]["rejected_audio"] == 0
+
+
+def test_build_import_batch_records_drops_tracks_with_malformed_isrc(
+    real_flac_factory, tmp_path: Path
+) -> None:
+    root = tmp_path / "music"
+    root.mkdir()
+    good = real_flac_factory({"artist": "Artist A", "title": "Good", "isrc": "USABC2400001"})
+    bad = real_flac_factory(
+        {
+            "artist": "Lizzo",
+            "title": "Good as Hell",
+            "isrc": "USAT21600354; USAT21601223",
+        }
+    )
+    good.rename(root / "good.flac")
+    bad.rename(root / "bad.flac")
+
+    records = cli._build_import_batch_records(str(root))
+
+    observed_titles = {
+        r["dj_tag"]["title"] for r in records if r["event_type"] == "audio_observed"
+    }
+    assert observed_titles == {"Good"}
+
+    rejected = [r for r in records if r["event_type"] == "rejected_audio"]
+    assert len(rejected) == 1
+    assert rejected[0]["reason"] == "malformed_isrc"
+    assert rejected[0]["raw_isrc"] == "USAT21600354; USAT21601223"
+
+    summary = next(r for r in records if r["event_type"] == "import_run_summary")
+    assert summary["summary"]["audio_observed"] == 1
+    assert summary["summary"]["rejected_audio"] == 1
+    assert summary["summary"]["issue_counts"]["malformed_isrc"] == 1
+
+
 def test_import_batch_accepts_required_flags() -> None:
     parser = cli.build_parser()
 

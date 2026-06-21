@@ -79,12 +79,7 @@ def normalize_isrc(value: str) -> str:
 
 
 def _resolved_collection_path(path: Path) -> Path:
-    candidate = path.expanduser().resolve()
-    if candidate.is_dir():
-        definition = candidate / ".resources" / "definition.yaml"
-        if definition.is_file():
-            return definition
-    return candidate
+    return path.expanduser().resolve()
 
 
 def verify_provider_config(config: ProviderRunnerConfig) -> None:

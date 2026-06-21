@@ -11,6 +11,7 @@ from cryptography.hazmat.backends import default_backend
 from .db_client import TaghagDbClient
 from .config import DatabaseConfig
 from .advanced_cue_planner import PIONEER_KEY_TO_CAMELOT, parse_pioneer_key
+from .time_base import reconcile_offset
 
 
 class MixonsetImporter:
@@ -79,6 +80,45 @@ class MixonsetImporter:
         if max_energy > 0 and (segment_energy / max_energy) < 0.45:
             return "breakdown"
         return "peak"
+
+    def _reconcile_mixonset_offset(
+        self,
+        audio_file_id: str,
+        owner_user_id: str,
+        mixonset_cue_rows: list[dict],
+    ) -> bool:
+        """Vote the mixonset grid against the human grid and persist the offset.
+
+        Returns True when a confident offset row was upserted. No human cues, or
+        too little structural overlap to vote, simply skips (the cues remain
+        ``time_base='rendition'`` with no offset, flagged ``offset_missing`` by
+        the canonical views until an offset lands).
+        """
+        human_rows = self.db._get_postgrest_rows(
+            "track_cue",
+            {
+                "select": "time_ms",
+                "audio_file_id": f"eq.{audio_file_id}",
+                "owner_user_id": f"eq.{owner_user_id}",
+                "source_system": "eq.human",
+            },
+        )
+        if not human_rows:
+            return False
+
+        human_ms = [float(r["time_ms"]) for r in human_rows]
+        mixonset_ms = [float(r["time_ms"]) for r in mixonset_cue_rows]
+        offset = reconcile_offset(
+            canonical_file_id=audio_file_id,
+            source_file_id=audio_file_id,
+            source_system="mixonset",
+            canonical_cues_ms=human_ms,
+            source_cues_ms=mixonset_ms,
+        )
+        if offset is None:
+            return False
+        self.db.upsert_rendition_time_offsets([offset.to_row(owner_user_id)])
+        return True
 
     def import_mixonset_analysis(
         self,
@@ -151,6 +191,7 @@ class MixonsetImporter:
             "decrypted_files": 0,
             "dj_tags_upserted": 0,
             "header_only_processed": 0,
+            "offsets_reconciled": 0,
         }
 
         owner_user_id = self.config.owner_user_id
@@ -269,6 +310,11 @@ class MixonsetImporter:
                         "cue_family": "mixonset",
                         "cue_kind": "predicted",
                         "source_system": "mixonset",
+                        # Mixonset reads the FLAC but emits its own analyzer grid,
+                        # lagged ~+15 ms from the human/master grid. Record the
+                        # rendition it measured so the offset re-zeros it.
+                        "time_base": "rendition",
+                        "measured_against_file_id": audio_file_id,
                         "confidence": float(b.get("mixability", 1.0))
                     })
 
@@ -287,6 +333,8 @@ class MixonsetImporter:
                             "ms_start": start_ms,
                             "ms_end": end_ms,
                             "source_system": "mixonset",
+                            "time_base": "rendition",
+                            "measured_against_file_id": audio_file_id,
                             "confidence": float(b.get("mixability", 1.0))
                         })
 
@@ -302,6 +350,12 @@ class MixonsetImporter:
                     if segment_rows:
                         self.db.insert_track_segments(segment_rows)
                         stats["segments_inserted"] += len(segment_rows)
+
+                    # Re-zero this analyzer grid onto the human/master grid.
+                    if self._reconcile_mixonset_offset(
+                        audio_file_id, owner_user_id, cue_rows
+                    ):
+                        stats["offsets_reconciled"] += 1
                 else:
                     stats["cues_inserted"] += len(cue_rows)
                     stats["segments_inserted"] += len(segment_rows)

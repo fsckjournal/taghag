@@ -149,24 +149,17 @@ def reconcile_offset(
 ) -> RenditionTimeOffset | None:
     """Reconcile one (canonical, source, system) offset via the strongest method.
 
-    Preference, strongest first: ``identity`` (source is the canonical file) ->
-    ``cross_correlation`` (confident grid vote) -> ``downbeat_anchor`` (explicit
-    single-anchor) -> ``declared_priming`` (codec geometry). Returns ``None`` when
-    no method has the inputs it needs.
+    Preference, strongest first: ``cross_correlation`` (a confident grid vote
+    is the only method that *measures* the real offset, so it wins even when the
+    source shares the canonical file id -- e.g. an analyzer like mixonset that
+    read the same FLAC but emits a lagged grid) -> ``identity`` (same file, no
+    grid to vote on) -> ``downbeat_anchor`` (explicit single-anchor) ->
+    ``declared_priming`` (codec geometry). Returns ``None`` when no method has
+    the inputs it needs.
     """
-    # 1. identity -- the source rendition is the canonical FLAC itself.
-    if source_file_id is not None and source_file_id == canonical_file_id:
-        return RenditionTimeOffset(
-            audio_file_id=canonical_file_id,
-            measured_against_file_id=source_file_id,
-            source_system=source_system,
-            offset_ms=0.0,
-            offset_method=METHOD_IDENTITY,
-            residual_ms=0.0,
-            confidence=1.0,
-        )
-
-    # 2. cross_correlation -- vote over the two cue grids.
+    # 1. cross_correlation -- vote over the two cue grids. Authoritative when
+    #    confident, because it empirically measures the lag (a true identity
+    #    simply votes ~0); identity-by-file-id would mislabel a lagged analyzer.
     if canonical_cues_ms and source_cues_ms:
         align = grid_offset(
             canonical_cues_ms, source_cues_ms, eps_ms=eps_ms, window_ms=window_ms
@@ -181,6 +174,27 @@ def reconcile_offset(
                 residual_ms=align.residual_ms,
                 confidence=round(_grid_confidence(align, eps_ms), 3),
             )
+
+    # 2. identity -- the source IS the canonical FLAC and the caller supplied no
+    #    grid to measure against, i.e. they are *asserting* it is the master
+    #    clock (offset 0). Crucially this does NOT fire as a fallback when grids
+    #    were given but failed to vote: a failed measurement must return None
+    #    (leaving the cues honestly flagged offset_missing), never fabricate a
+    #    zero-offset/confidence-1 identity for a lagged analyzer we couldn't pin.
+    if (
+        source_file_id is not None
+        and source_file_id == canonical_file_id
+        and not (canonical_cues_ms and source_cues_ms)
+    ):
+        return RenditionTimeOffset(
+            audio_file_id=canonical_file_id,
+            measured_against_file_id=source_file_id,
+            source_system=source_system,
+            offset_ms=0.0,
+            offset_method=METHOD_IDENTITY,
+            residual_ms=0.0,
+            confidence=1.0,
+        )
 
     # 3. downbeat_anchor -- one explicit, trusted beat from each grid.
     if canonical_downbeat_ms is not None and source_downbeat_ms is not None:

@@ -116,6 +116,19 @@ def test_dedupes_quadruple_inserted_human_cues() -> None:
     assert abs(align.offset_ms - 10.0) < 1.0
 
 
+def test_same_file_but_unvotable_grids_returns_none_not_identity() -> None:
+    """A lagged analyzer on the same FLAC whose grid can't vote must NOT be
+    fabricated as identity offset 0 -- it returns None (stays offset_missing)."""
+    off = reconcile_offset(
+        canonical_file_id="flac-1",
+        source_file_id="flac-1",  # same file id
+        source_system="mixonset",
+        canonical_cues_ms=[1694.0],  # one lonely human cue, nothing to vote
+        source_cues_ms=[0.0, 730.0, 8349.0, 15968.0],
+    )
+    assert off is None
+
+
 def test_declared_priming_when_no_grid_overlap() -> None:
     off = reconcile_offset(
         canonical_file_id="flac-1",

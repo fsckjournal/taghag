@@ -213,3 +213,13 @@ def test_provider_evidence_log_can_feed_import_batch(
     assert evidence_records[0]["tag_evidence"]["winning_fields_json"] == {
         "canonical_label": "Provider Label"
     }
+
+    audio_observed = next(record for record in records if record["event_type"] == "audio_observed")
+    dj_tag = audio_observed["dj_tag"]
+    # Resolved provider evidence overlays the untrusted raw-ID3 label...
+    assert dj_tag["label"] == "Provider Label"
+    assert dj_tag["tag_source"] == "local_id3+postman_evidence"
+    # ...but bpm/musical_key stay sourced from the measured/local tags --
+    # provider catalog values must never silently overwrite them.
+    assert dj_tag["bpm"] == 124.0
+    assert dj_tag["musical_key"] == "Am"

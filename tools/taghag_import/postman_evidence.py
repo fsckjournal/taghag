@@ -13,7 +13,7 @@ FIELD_AUTHORITY = {
     "canonical_label": "beatport",
     "canonical_genre": "beatport",
     "bpm": "beatport",
-    "key": "beatport",
+    "musical_key": "beatport",
     "canonical_title": "tidal",
     "isrc": "tidal",
     "canonical_album": "spotify",
@@ -24,6 +24,13 @@ FIELD_NAME_MAP = {
     "canonical_album": "album",
     "canonical_label": "label",
     "canonical_genre": "genre",
+    "canonical_sub_genre": "provider_subgenre",
+    # Provider-reported bpm/key are catalog metadata, not an audio measurement.
+    # Kept under distinct field names so callers can never mistake them for
+    # the measured dj_tag.bpm / dj_tag.musical_key that Butter Flow's
+    # BPM-disagreement and key-stability cost terms depend on.
+    "bpm": "provider_bpm",
+    "musical_key": "provider_musical_key",
 }
 
 
@@ -38,6 +45,9 @@ class ResolvedTags:
     catalog_number: str = ""
     release_date: str = ""
     year: str = ""
+    provider_bpm: str = ""
+    provider_musical_key: str = ""
+    provider_subgenre: str = ""
     spotify_id: str = ""
     beatport_album_id: str = ""
     beatport_track_id: str = ""

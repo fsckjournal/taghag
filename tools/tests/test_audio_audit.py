@@ -100,6 +100,52 @@ def test_run_audio_audit_writes_metadata_only_reports(
     assert csv_rows[0]["issue_codes"] == "missing_label"
 
 
+def test_run_audio_audit_reads_real_isrc_without_monkeypatching_extractor(
+    real_flac_factory, tmp_path: Path
+) -> None:
+    root = tmp_path / "music"
+    root.mkdir()
+    flac_path = real_flac_factory(
+        {"artist": "Pitchben", "title": "Soda", "isrc": "DEM091100068"}
+    )
+    flac_path.rename(root / "track.flac")
+
+    result = audio_audit.run_audio_audit(root, tmp_path / "reports")
+
+    records = [
+        json.loads(line)
+        for line in result.jsonl_path.read_text(encoding="utf-8").splitlines()
+    ]
+    assert records[0]["isrc"] == "DEM091100068"
+    assert records[0]["artist"] == "Pitchben"
+    assert "missing_isrc" not in records[0]["issue_codes"]
+
+
+def test_is_malformed_isrc_flags_multi_value_and_accepts_single_valid() -> None:
+    assert audio_audit.is_malformed_isrc("USAT21600354; USAT21601223") is True
+    assert audio_audit.is_malformed_isrc("not-an-isrc") is True
+    assert audio_audit.is_malformed_isrc("") is False
+    assert audio_audit.is_malformed_isrc(None) is False
+    assert audio_audit.is_malformed_isrc("USABC2400001") is False
+
+
+def test_metadata_issue_codes_flags_malformed_isrc() -> None:
+    tags = {
+        "artist": "Lizzo",
+        "title": "Good as Hell",
+        "bpm": "124",
+        "musical_key": "Am",
+        "label": "Atlantic",
+        "isrc": "USAT21600354; USAT21601223",
+        "genre": "Pop",
+        "subgenre": "Pop",
+    }
+
+    issues = audio_audit.metadata_issue_codes(tags, {})
+
+    assert issues == ["malformed_isrc"]
+
+
 def test_metadata_issue_codes_reuses_import_batch_contract() -> None:
     tags = {
         "artist": "",

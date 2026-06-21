@@ -2,8 +2,39 @@ from __future__ import annotations
 
 from taghag_import.postman_evidence import (
     evidence_to_row,
+    merge_tag_evidence,
     parse_tag_evidence,
     resolve_tag_evidence,
+)
+
+# Captured verbatim from a real Postman run against Beatport/Spotify (ISRC
+# DEM091100068, "Soda" by Pitchben) in
+# artifacts/apple_poc_rbx_161/provider_evidence_test/provider_evidence.log.
+REAL_BEATPORT_MATCHED_MARKER = (
+    '[Tag Evidence JSON] {"candidate_count": 1, "candidates": [{"album": "Pitchslap", '
+    '"artist": "Pitchben", "bpm": 121, "catalog_number": "CPT3802", "disc_number": "", '
+    '"explicit": false, "external_id": "3002744", "field_candidates": ['
+    '{"confidence": 0.98, "field_name": "canonical_title", "normalized_value": "Soda", '
+    '"rationale": {"external_id": "3002744", "match_confidence": "exact", "provider": "beatport"}}, '
+    '{"confidence": 0.94, "field_name": "canonical_label", "normalized_value": "Compost", '
+    '"rationale": {"external_id": "3002744", "match_confidence": "exact", "provider": "beatport"}}, '
+    '{"confidence": 0.94, "field_name": "canonical_genre", "normalized_value": "Indie Dance", '
+    '"rationale": {"external_id": "3002744", "match_confidence": "exact", "provider": "beatport"}}, '
+    '{"confidence": 0.99, "field_name": "isrc", "normalized_value": "DEM091100068", '
+    '"rationale": {"external_id": "3002744", "match_confidence": "exact", "provider": "beatport"}}, '
+    '{"confidence": 0.96, "field_name": "bpm", "normalized_value": 121, '
+    '"rationale": {"external_id": "3002744", "match_confidence": "exact", "provider": "beatport"}}, '
+    '{"confidence": 0.96, "field_name": "canonical_bpm", "normalized_value": 121, '
+    '"rationale": {"external_id": "3002744", "match_confidence": "exact", "provider": "beatport"}}, '
+    '{"confidence": 0.96, "field_name": "musical_key", "normalized_value": "2B", '
+    '"rationale": {"external_id": "3002744", "match_confidence": "exact", "provider": "beatport"}}, '
+    '{"confidence": 0.96, "field_name": "canonical_key", "normalized_value": "2B", '
+    '"rationale": {"external_id": "3002744", "match_confidence": "exact", "provider": "beatport"}}], '
+    '"genre": "Indie Dance", "isrc": "DEM091100068", "key": "2B", "label": "Compost", '
+    '"match_confidence": "exact", "match_score": 100, "provider": "beatport", '
+    '"provider_track_id": "3002744", "release_date": "2011-11-04", "title": "Soda"}], '
+    '"ingestion_confidence": "high", "lookup_isrc": "DEM091100068", "provider": "beatport", '
+    '"schema": "tagslut.postman.tag_evidence.v1", "source": "beatport_search_by_isrc", "status": "matched"}'
 )
 
 
@@ -35,6 +66,35 @@ noise
         "tidal": "matched",
         "beatport": "matched",
     }
+
+
+def test_merge_tag_evidence_resolves_provider_bpm_and_key_under_distinct_names() -> None:
+    evidences = parse_tag_evidence(REAL_BEATPORT_MATCHED_MARKER)
+    resolved = merge_tag_evidence(evidences)
+
+    assert resolved.title == "Soda"
+    assert resolved.label == "Compost"
+    assert resolved.genre == "Indie Dance"
+    # Provider bpm/key land under provider_* names, never under bpm/musical_key
+    # -- those names are reserved for the measured/local signal elsewhere in
+    # the pipeline (dj_tag, Butter Flow's cost terms).
+    assert resolved.provider_bpm == "121"
+    assert resolved.provider_musical_key == "2B"
+    assert not hasattr(resolved, "bpm")
+    assert not hasattr(resolved, "musical_key")
+
+
+def test_merge_tag_evidence_applies_beatport_authority_bonus_for_key() -> None:
+    competing = """
+[Tag Evidence JSON] {"schema":"tagslut.postman.tag_evidence.v1","provider":"tidal","status":"matched","lookup_isrc":"DEM091100068","candidates":[{"field_candidates":[{"field_name":"musical_key","normalized_value":"9A","confidence":0.96}]}]}
+""".strip() + "\n" + REAL_BEATPORT_MATCHED_MARKER
+
+    resolved = merge_tag_evidence(parse_tag_evidence(competing))
+
+    # Beatport's authority bonus (+0.05) should win over TIDAL's equal raw
+    # confidence (0.96) for musical_key.
+    assert resolved.provider_musical_key == "2B"
+    assert resolved.field_sources["provider_musical_key"].startswith("beatport:")
 
 
 def test_resolve_no_match_result_returns_none() -> None:

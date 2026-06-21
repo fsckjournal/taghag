@@ -15,8 +15,14 @@ from .config import read_database_config
 from .db_client import TaghagDbClient
 from .discover import discover_audio_files
 from .genre import classify_genre
-from .audio_audit import metadata_issue_codes, run_audio_audit
-from .postman_evidence import evidence_lookup_key, evidence_to_row, parse_postman_evidence
+from .audio_audit import is_malformed_isrc, metadata_issue_codes, run_audio_audit
+from .postman_evidence import (
+    ResolvedTags,
+    evidence_lookup_key,
+    evidence_to_row,
+    merge_tag_evidence,
+    parse_postman_evidence,
+)
 from .extract_dj_slice import extract_dj_slice
 from .provider_runner import (
     ProviderRunnerConfig,
@@ -31,7 +37,6 @@ from .tags import (
     apply_flac_tag_updates,
     compute_file_identity,
     dump_flac_tags,
-    extract_flac_tags,
 )
 from .stage import execute_stage, plan_stage, plan_stage_manifest
 from .transcode import build_transcode_plan, execute_transcode_plan
@@ -73,6 +78,52 @@ def _now() -> str:
     return datetime.now(UTC).isoformat()
 
 
+def _pad_release_date(value: object) -> str | None:
+    text = str(value or "").strip()
+    if not text:
+        return None
+    if len(text) == 4:
+        return f"{text}-01-01"
+    if len(text) == 7:
+        return f"{text}-01"
+    return text
+
+
+def _apply_resolved_evidence(dj_tag: dict[str, object], resolved: ResolvedTags) -> bool:
+    """Overlay provider-verified identity fields onto a dj_tag record.
+
+    Provider bpm/musical_key (e.g. Beatport catalog values) are intentionally
+    excluded: dj_tag.bpm/musical_key stay sourced from the measured/local
+    tags, since Butter Flow's BPM-disagreement and key-stability cost terms
+    depend on comparing measured values against provider/Apple evidence, not
+    on having that evidence overwrite the measurement.
+    """
+    overlays: dict[str, object | None] = {
+        "artist": resolved.artist or None,
+        "title": resolved.title or None,
+        "album": resolved.album or None,
+        "label": resolved.label or None,
+        "catalog_number": resolved.catalog_number or None,
+        "release_date": _pad_release_date(resolved.release_date),
+        "isrc": resolved.isrc or None,
+    }
+    if resolved.year.isdigit():
+        overlays["year"] = int(resolved.year)
+    genre_input = resolved.genre or resolved.provider_subgenre
+    if genre_input:
+        canonical = classify_genre(genre_input)
+        overlays["canonical_genre"] = canonical.get("canonical_genre")
+        overlays["canonical_subgenre"] = canonical.get("canonical_subgenre")
+
+    applied_any = False
+    for key, value in overlays.items():
+        if value is None:
+            continue
+        dj_tag[key] = value
+        applied_any = True
+    return applied_any
+
+
 def _build_import_batch_records(
     root: str,
     *,
@@ -102,11 +153,32 @@ def _build_import_batch_records(
 
     file_keys_by_isrc: dict[str, str] = {}
     file_keys_by_title_artist: dict[tuple[str, str], str] = {}
+    dj_tags_by_file_key: dict[str, dict[str, object]] = {}
     observed_count = 0
+    dropped_count = 0
     issue_counts: dict[str, int] = {}
 
     for item in found:
         tags = _extract_tags(item.path)
+        if is_malformed_isrc(tags.get("isrc")):
+            # Legacy Picard passes occasionally concatenated several historical
+            # ISRCs into one semicolon-joined tag value. Acquisition-time
+            # tagging always yields a single valid ISRC, so these tracks are
+            # excluded from this import batch rather than matched on a bogus
+            # composite key. The audio files themselves are left untouched.
+            issue_counts["malformed_isrc"] = issue_counts.get("malformed_isrc", 0) + 1
+            dropped_count += 1
+            records.append(
+                event(
+                    "rejected_audio",
+                    run_id=run_id,
+                    path=item.path,
+                    relative_path=item.relative_path,
+                    reason="malformed_isrc",
+                    raw_isrc=tags.get("isrc"),
+                )
+            )
+            continue
         identity = compute_file_identity(item.path, item.relative_path)
         probe = probe_flac(item.path)
         canonical = classify_genre(tags.get("genre") or tags.get("subgenre"))
@@ -119,6 +191,24 @@ def _build_import_batch_records(
         )
         for issue_code in issue_codes:
             issue_counts[issue_code] = issue_counts.get(issue_code, 0) + 1
+
+        if "codec_mismatch" in issue_codes:
+            # ffprobe detected a non-FLAC encoded stream (e.g. an MP3
+            # re-extensioned to .flac). Acquisition-time tagging guarantees
+            # genuine FLAC masters, so these are excluded from this import
+            # batch rather than treated as valid audio. File left untouched.
+            dropped_count += 1
+            records.append(
+                event(
+                    "rejected_audio",
+                    run_id=run_id,
+                    path=item.path,
+                    relative_path=item.relative_path,
+                    reason="codec_mismatch",
+                    detected_codec=probe.get("codec"),
+                )
+            )
+            continue
 
         file_key = str(identity["file_key"])
         if tags.get("isrc"):
@@ -147,7 +237,7 @@ def _build_import_batch_records(
             "album": tags.get("album"),
             "label": tags.get("label"),
             "catalog_number": tags.get("catalog_number"),
-            "release_date": (tags.get("release_date") + "-01-01" if len(str(tags.get("release_date") or "")) == 4 else (tags.get("release_date") + "-01" if len(str(tags.get("release_date") or "")) == 7 else tags.get("release_date"))) if tags.get("release_date") else None,
+            "release_date": _pad_release_date(tags.get("release_date")),
             "year": int(str(tags["year"])[:4]) if str(tags.get("year") or "")[:4].isdigit() else None,
             "bpm": float(tags["bpm"]) if str(tags.get("bpm") or "").replace(".", "", 1).isdigit() else None,
             "musical_key": tags.get("musical_key"),
@@ -159,6 +249,7 @@ def _build_import_batch_records(
             "energy": tags.get("energy"),
             "tag_source": "local_id3",
         }
+        dj_tags_by_file_key[file_key] = dj_tag
         audio_observation = {
             "import_run_id": run_id,
             "observed_path": item.path,
@@ -211,8 +302,25 @@ def _build_import_batch_records(
         records.append(event("out_of_scope_audio", run_id=run_id, **item.to_dict()))
 
     if postman_evidence:
+        evidence_list = parse_postman_evidence(postman_evidence)
+
+        isrc_groups: dict[str, list[dict[str, object]]] = {}
+        for evidence in evidence_list:
+            isrc_groups.setdefault(evidence_lookup_key(evidence).strip().upper(), []).append(evidence)
+
+        for isrc, group in isrc_groups.items():
+            file_key = file_keys_by_isrc.get(isrc)
+            dj_tag = dj_tags_by_file_key.get(file_key) if file_key else None
+            if dj_tag is None:
+                continue
+            resolved = merge_tag_evidence(group)
+            if resolved.is_empty():
+                continue
+            if _apply_resolved_evidence(dj_tag, resolved):
+                dj_tag["tag_source"] = "local_id3+postman_evidence"
+
         seen: set[str] = set()
-        for evidence in parse_postman_evidence(postman_evidence):
+        for evidence in evidence_list:
             lookup_key = evidence_lookup_key(evidence).strip().upper()
             file_key = file_keys_by_isrc.get(lookup_key)
             lookup_type = "isrc"
@@ -239,6 +347,7 @@ def _build_import_batch_records(
             summary={
                 "audio_observed": observed_count,
                 "out_of_scope_audio": len(skipped),
+                "rejected_audio": dropped_count,
                 "issue_counts": issue_counts,
             },
         )
@@ -553,14 +662,22 @@ def _fetch_metadata(args: argparse.Namespace) -> int:
     
     root_path = Path(args.root).expanduser().resolve()
     found, _ = discover_audio_files(root_path)
-    
+
     isrcs = set()
+    dropped = 0
     for item in found:
         tags = _extract_tags(item.path)
         isrc = tags.get("isrc")
-        if isrc:
-            isrcs.add(str(isrc).strip().upper())
-            
+        if not isrc:
+            continue
+        if is_malformed_isrc(isrc):
+            dropped += 1
+            continue
+        isrcs.add(str(isrc).strip().upper())
+
+    if dropped:
+        print(f"Dropped {dropped} track(s) with a malformed/multi-value ISRC tag.")
+
     if not isrcs:
         print("No ISRCs found in the provided directory.")
         return 1

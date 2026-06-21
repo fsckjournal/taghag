@@ -6,34 +6,33 @@ from pathlib import Path
 import re
 from typing import Any, Mapping
 
+from .provider_runner import normalize_isrc
 
-ID3_TO_FIELD = {
-    "TIT2": "title",
-    "TPE1": "artist",
-    "TALB": "album",
-    "TPUB": "label",
-    "TXXX:LABEL": "label",
-    "TPE2": "album_artist",
-    "TXXX:CATALOGNUMBER": "catalog_number",
-    "TCON": "genre",
-    "TXXX:SUBGENRE": "subgenre",
-    "TBPM": "bpm",
-    "TKEY": "musical_key",
-    "TXXX:INITIALKEY": "musical_key",
-    "TYER": "year",
-    "TDRC": "year",
-    "TDOR": "release_date",
-    "TSRC": "isrc",
-    "TRCK": "track_number",
-    "TCOM": "composer",
-    "COMM": "comment",
-    "TXXX:COMPILATION": "compilation",
-    "TXXX:RATING": "rating",
-    "TXXX:ENERGY": "energy",
-    "TXXX:PCM_HASH": "pcm_hash",
-    "TXXX:SPOTIFY_ID": "spotify_id",
-    "TXXX:BEATPORT_ALBUM_ID": "beatport_album_id",
-    "TXXX:BEATPORT_TRACK_ID": "beatport_track_id",
+
+# Vorbis comment key for each writable field (lowercase; mutagen is case-insensitive).
+FIELD_TO_VORBIS_KEY: dict[str, str] = {
+    "title": "title",
+    "artist": "artist",
+    "album": "album",
+    "album_artist": "albumartist",
+    "label": "label",
+    "catalog_number": "catalognumber",
+    "release_date": "date",
+    "genre": "genre",
+    "subgenre": "subgenre",
+    "bpm": "bpm",
+    "musical_key": "initialkey",
+    "year": "year",
+    "isrc": "isrc",
+    "track_number": "tracknumber",
+    "compilation": "compilation",
+    "composer": "composer",
+    "rating": "rating",
+    "energy": "energy",
+    "pcm_hash": "pcm_hash",
+    "spotify_id": "spotify_id",
+    "beatport_album_id": "beatport_album_id",
+    "beatport_track_id": "beatport_track_id",
 }
 
 FIELD_ALIASES = {
@@ -42,32 +41,7 @@ FIELD_ALIASES = {
     "key": "musical_key",
 }
 
-WRITABLE_FIELDS = frozenset(
-    {
-        "album",
-        "album_artist",
-        "artist",
-        "bpm",
-        "catalog_number",
-        "compilation",
-        "composer",
-        "energy",
-        "genre",
-        "isrc",
-        "label",
-        "musical_key",
-        "pcm_hash",
-        "rating",
-        "release_date",
-        "subgenre",
-        "title",
-        "track_number",
-        "year",
-        "spotify_id",
-        "beatport_album_id",
-        "beatport_track_id",
-    }
-)
+WRITABLE_FIELDS = frozenset(FIELD_TO_VORBIS_KEY)
 
 
 @dataclass(frozen=True)
@@ -79,129 +53,71 @@ class TagWriteResult:
     executed: bool
 
 
-def _first_text(frame: Any) -> str | None:
-    text = getattr(frame, "text", None)
-    if isinstance(text, (list, tuple)) and text:
-        value = str(text[0]).strip()
-        return value or None
-    if text:
-        value = str(text).strip()
-        return value or None
-    if hasattr(frame, "text"):
-        value = str(frame.text).strip()
-        return value or None
-    return None
-
-
-def _load_id3(path: Path) -> dict[str, Any]:
-    from mutagen import MutagenError
-    from mutagen.id3 import ID3, ID3NoHeaderError
-
-    try:
-        tags = ID3(path)
-    except (ID3NoHeaderError, MutagenError):
-        return {}
-
-    return tags
-
-
 def _year_from_value(value: object) -> str | None:
     match = re.search(r"(19|20)\d{2}", str(value or ""))
     return match.group(0) if match else None
 
 
-def _find_frame(id3_tags: Mapping[str, Any], frame_id: str) -> Any | None:
-    frame = id3_tags.get(frame_id)
-    if frame is not None:
-        return frame
-
-    if frame_id.startswith("TXXX:"):
-        wanted_desc = frame_id.split(":", 1)[1].casefold()
-        for candidate in id3_tags.values():
-            if getattr(candidate, "FrameID", "") == "TXXX" and str(
-                getattr(candidate, "desc", "")
-            ).casefold() == wanted_desc:
-                return candidate
-
-    if frame_id == "COMM":
-        for candidate in id3_tags.values():
-            if getattr(candidate, "FrameID", "") == "COMM":
-                return candidate
-    return None
-
-
 def extract_flac_tags(path: str | Path) -> dict[str, Any]:
+    from mutagen import MutagenError
+    from mutagen.flac import FLAC
+
     file_path = Path(path).expanduser().resolve()
-    id3_tags = _load_id3(file_path)
+    try:
+        audio = FLAC(file_path)
+    except (MutagenError, OSError):
+        return {}
 
-    normalized: dict[str, Any] = {
-        "title": None,
-        "artist": None,
-        "album": None,
-        "album_artist": None,
-        "label": None,
-        "catalog_number": None,
-        "release_date": None,
-        "genre": None,
-        "subgenre": None,
-        "bpm": None,
-        "musical_key": None,
-        "year": None,
-        "isrc": None,
-        "compilation": None,
-        "rating": None,
-        "energy": None,
-        "pcm_hash": None,
-        "track_number": None,
-        "composer": None,
-        "comment": None,
-        "spotify_id": None,
-        "beatport_album_id": None,
-        "beatport_track_id": None,
-        "raw_id3": {},
+    def first(*names: str) -> str | None:
+        for name in names:
+            values = audio.get(name)
+            if values:
+                value = str(values[0]).strip()
+                if value:
+                    return value
+        return None
+
+    result: dict[str, Any] = {
+        "title": first("title"),
+        "artist": first("artist"),
+        "album": first("album"),
+        "album_artist": first("albumartist", "album artist"),
+        "label": first("label", "organization"),
+        "catalog_number": first("catalognumber", "catalog number"),
+        "release_date": first("date", "originaldate"),
+        "genre": first("genre"),
+        "subgenre": first("subgenre"),
+        "bpm": first("bpm"),
+        "musical_key": first("initialkey", "key"),
+        "year": first("year"),
+        "isrc": first("isrc"),
+        "track_number": first("tracknumber"),
+        "compilation": first("compilation"),
+        "composer": first("composer"),
+        "comment": first("comment", "description"),
+        "rating": first("rating"),
+        "energy": first("energy"),
+        "pcm_hash": first("pcm_hash"),
+        "spotify_id": first("spotify_id"),
+        "beatport_album_id": first("beatport_album_id"),
+        "beatport_track_id": first("beatport_track_id"),
+        "raw_tags": {},
     }
 
-    for frame_id, field_name in ID3_TO_FIELD.items():
-        frame = _find_frame(id3_tags, frame_id)
-        if frame is None:
-            continue
-        value = _first_text(frame)
-        if value is not None:
-            normalized[field_name] = value
+    if audio.tags is not None:
+        result["raw_tags"] = {
+            k: [str(v) for v in vals]
+            for k, vals in audio.tags.as_dict().items()
+        }
 
-    normalized["raw_id3"] = {
-        key: _first_text(value)
-        for key, value in id3_tags.items()
-        if _first_text(value) is not None
-    }
-    if normalized["year"]:
-        if not normalized["release_date"]:
-            normalized["release_date"] = normalized["year"]
-        normalized["year"] = _year_from_value(normalized["year"])
-    elif normalized["release_date"]:
-        normalized["year"] = _year_from_value(normalized["release_date"])
+    if result["year"]:
+        if not result["release_date"]:
+            result["release_date"] = result["year"]
+        result["year"] = _year_from_value(result["year"])
+    elif result["release_date"]:
+        result["year"] = _year_from_value(result["release_date"])
 
-    return normalized
-
-
-def _safe_frame_values(frame: Any, max_value_len: int) -> list[str]:
-    data = getattr(frame, "data", None)
-    if isinstance(data, (bytes, bytearray)):
-        return [f"<binary:{len(data)} bytes>"]
-
-    text = getattr(frame, "text", None)
-    if isinstance(text, (list, tuple)):
-        return [str(value)[:max_value_len] for value in text if str(value)]
-    if text not in (None, ""):
-        return [str(text)[:max_value_len]]
-
-    for attribute in ("url", "rating", "count", "owner"):
-        value = getattr(frame, attribute, None)
-        if value not in (None, ""):
-            return [str(value)[:max_value_len]]
-
-    rendered = str(frame).strip()
-    return [rendered[:max_value_len]] if rendered else []
+    return result
 
 
 def dump_flac_tags(
@@ -209,13 +125,25 @@ def dump_flac_tags(
     *,
     max_value_len: int = 2000,
 ) -> dict[str, list[str]]:
+    from mutagen import MutagenError
+    from mutagen.flac import FLAC
+
     file_path = Path(path).expanduser().resolve()
-    tags = _load_id3(file_path)
+    try:
+        audio = FLAC(file_path)
+    except (MutagenError, OSError):
+        return {}
+
     dumped: dict[str, list[str]] = {}
-    for key, frame in sorted(tags.items(), key=lambda item: str(item[0])):
-        values = _safe_frame_values(frame, max_value_len)
-        if values:
-            dumped[str(key)] = values
+
+    if audio.tags is not None:
+        for key, vals in sorted(audio.tags.as_dict().items()):
+            dumped[key] = [str(v)[:max_value_len] for v in vals]
+
+    for i, pic in enumerate(audio.pictures):
+        label = pic.desc or str(i)
+        dumped[f"PICTURE:{label}"] = [f"<binary:{len(pic.data)} bytes>"]
+
     return dumped
 
 
@@ -226,116 +154,33 @@ def _normalize_updates(updates: Mapping[str, object]) -> dict[str, str]:
         if field not in WRITABLE_FIELDS:
             raise ValueError(f"unsupported FLAC tag field: {raw_field}")
         value = str(raw_value or "").strip()
-        if value:
-            normalized[field] = value
+        if not value:
+            continue
+        if field == "isrc":
+            # Every track is tagged at acquisition with exactly one valid
+            # ISRC, so the tagger never writes a semicolon-joined or
+            # otherwise malformed value -- there's no legitimate multi-ISRC
+            # case left to support.
+            value = normalize_isrc(value)
+        normalized[field] = value
     return normalized
 
 
-def _txxx_value(tags: Any, description: str) -> str:
-    wanted = description.casefold()
-    for frame in tags.getall("TXXX"):
-        if str(getattr(frame, "desc", "")).casefold() != wanted:
-            continue
-        return _first_text(frame) or ""
-    return ""
+def _field_has_value(audio: Any, field: str) -> bool:
+    vorbis_key = FIELD_TO_VORBIS_KEY[field]
+    vals = audio.get(vorbis_key)
+    if vals and str(vals[0]).strip():
+        return True
+    # album_artist has a secondary lookup key
+    if field == "album_artist":
+        vals2 = audio.get("album artist")
+        return bool(vals2 and str(vals2[0]).strip())
+    return False
 
 
-def _frame_value(tags: Any, frame_id: str) -> str:
-    return _first_text(tags.get(frame_id)) or ""
-
-
-def _field_has_value(tags: Any, field: str) -> bool:
-    if field == "label":
-        return bool(_frame_value(tags, "TPUB") or _txxx_value(tags, "LABEL"))
-    if field == "catalog_number":
-        return bool(_txxx_value(tags, "CATALOGNUMBER"))
-    if field == "subgenre":
-        return bool(_txxx_value(tags, "SUBGENRE"))
-    if field == "musical_key":
-        return bool(_frame_value(tags, "TKEY") or _txxx_value(tags, "INITIALKEY"))
-    if field in {"compilation", "rating", "energy", "pcm_hash", "spotify_id", "beatport_album_id", "beatport_track_id"}:
-        return bool(_txxx_value(tags, field.upper()))
-
-    frame_by_field = {
-        "title": "TIT2",
-        "artist": "TPE1",
-        "album": "TALB",
-        "album_artist": "TPE2",
-        "release_date": "TDRC",
-        "year": "TDRC",
-        "genre": "TCON",
-        "bpm": "TBPM",
-        "isrc": "TSRC",
-        "track_number": "TRCK",
-        "composer": "TCOM",
-    }
-    return bool(_frame_value(tags, frame_by_field[field]))
-
-
-def _replace_txxx(tags: Any, description: str, value: str) -> None:
-    from mutagen.id3 import TXXX
-
-    wanted = description.casefold()
-    kept = [
-        frame
-        for frame in tags.getall("TXXX")
-        if str(getattr(frame, "desc", "")).casefold() != wanted
-    ]
-    tags.setall("TXXX", kept)
-    tags.add(TXXX(encoding=3, desc=description, text=[value]))
-
-
-def _set_field(tags: Any, field: str, value: str) -> None:
-    from mutagen.id3 import (
-        TALB,
-        TBPM,
-        TCOM,
-        TCON,
-        TDRC,
-        TIT2,
-        TKEY,
-        TPE1,
-        TPE2,
-        TPUB,
-        TRCK,
-        TSRC,
-    )
-
-    text_frames = {
-        "title": ("TIT2", TIT2),
-        "artist": ("TPE1", TPE1),
-        "album": ("TALB", TALB),
-        "album_artist": ("TPE2", TPE2),
-        "release_date": ("TDRC", TDRC),
-        "year": ("TDRC", TDRC),
-        "genre": ("TCON", TCON),
-        "bpm": ("TBPM", TBPM),
-        "isrc": ("TSRC", TSRC),
-        "track_number": ("TRCK", TRCK),
-        "composer": ("TCOM", TCOM),
-    }
-    if field in text_frames:
-        frame_id, frame_type = text_frames[field]
-        tags.setall(frame_id, [frame_type(encoding=3, text=[value])])
-        return
-    if field == "label":
-        tags.setall("TPUB", [TPUB(encoding=3, text=[value])])
-        _replace_txxx(tags, "LABEL", value)
-        return
-    if field == "catalog_number":
-        _replace_txxx(tags, "CATALOGNUMBER", value)
-        return
-    if field == "subgenre":
-        _replace_txxx(tags, "SUBGENRE", value)
-        return
-    if field == "musical_key":
-        tags.setall("TKEY", [TKEY(encoding=3, text=[value])])
-        _replace_txxx(tags, "INITIALKEY", value)
-        return
-    if field in {"compilation", "rating", "energy", "pcm_hash", "spotify_id", "beatport_album_id", "beatport_track_id"}:
-        _replace_txxx(tags, field.upper(), value)
-        return
-    raise ValueError(f"unsupported FLAC tag field: {field}")
+def _set_field(audio: Any, field: str, value: str) -> None:
+    vorbis_key = FIELD_TO_VORBIS_KEY[field]
+    audio[vorbis_key] = [value]
 
 
 def apply_flac_tag_updates(
@@ -345,7 +190,7 @@ def apply_flac_tag_updates(
     execute: bool = False,
     force: bool = False,
 ) -> TagWriteResult:
-    from mutagen.id3 import ID3, ID3NoHeaderError
+    from mutagen.flac import FLAC
 
     file_path = Path(path).expanduser().resolve()
     if file_path.suffix.lower() != ".flac":
@@ -353,16 +198,15 @@ def apply_flac_tag_updates(
     if not file_path.is_file():
         raise FileNotFoundError(file_path)
 
-    try:
-        tags = ID3(file_path)
-    except ID3NoHeaderError:
-        tags = ID3()
+    audio = FLAC(file_path)
+    if audio.tags is None:
+        audio.add_tags()
 
     normalized = _normalize_updates(updates)
     planned: list[str] = []
     skipped: list[str] = []
     for field in sorted(normalized):
-        if not force and _field_has_value(tags, field):
+        if not force and _field_has_value(audio, field):
             skipped.append(field)
         else:
             planned.append(field)
@@ -370,9 +214,9 @@ def apply_flac_tag_updates(
     applied: list[str] = []
     if execute and planned:
         for field in planned:
-            _set_field(tags, field, normalized[field])
+            _set_field(audio, field, normalized[field])
             applied.append(field)
-        tags.save(file_path, v2_version=3)
+        audio.save()
 
     return TagWriteResult(
         path=str(file_path),

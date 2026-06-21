@@ -3,7 +3,7 @@ from __future__ import annotations
 import hashlib
 from pathlib import Path
 
-from taghag_import.flac import discover_flacs, pcm_sha256
+from taghag_import.flac import discover_flacs, extract_flac_tags, pcm_sha256
 
 
 def test_discover_flacs_accepts_file_and_filters_junk(tmp_path: Path) -> None:
@@ -50,3 +50,24 @@ def test_pcm_sha256_hashes_decoded_stdout(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setattr("taghag_import.flac.subprocess.Popen", lambda *args, **kwargs: process)
 
     assert pcm_sha256(track) == hashlib.sha256(b"pcm").hexdigest()
+
+
+def test_extract_flac_tags_reads_real_vorbis_comments(real_flac_factory) -> None:
+    flac_path = real_flac_factory(
+        {
+            "artist": "Pitchben",
+            "title": "Soda",
+            "album": "Soda",
+            "isrc": "DEM091100068",
+            "bpm": "121",
+            "initialkey": "2B",
+        }
+    )
+
+    extracted = extract_flac_tags(flac_path)
+
+    assert extracted["artist"] == "Pitchben"
+    assert extracted["title"] == "Soda"
+    assert extracted["isrc"] == "DEM091100068"
+    assert extracted["bpm"] == "121"
+    assert extracted["musical_key"] == "2B"

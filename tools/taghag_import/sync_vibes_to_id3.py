@@ -5,7 +5,7 @@ import re
 from pathlib import Path
 from typing import Any
 
-from mutagen.id3 import ID3, COMM, ID3NoHeaderError
+from mutagen.flac import FLAC
 
 from .db_client import TaghagDbClient
 
@@ -21,23 +21,11 @@ def sync_vibes_to_file(path: Path, vibes: list[str], dry_run: bool = True) -> bo
 
     vibe_str = f"{VIBE_PREFIX} {' | '.join(vibes)}]"
 
-    try:
-        audio = ID3(path)
-    except ID3NoHeaderError:
-        audio = ID3()
+    audio = FLAC(path)
+    if audio.tags is None:
+        audio.add_tags()
 
-    comm_frames = audio.getall("COMM")
-    target_frame = None
-    for frame in comm_frames:
-        if frame.desc == "" or frame.desc.lower() == "comment":
-            target_frame = frame
-            break
-
-    if target_frame is None:
-        target_frame = COMM(encoding=3, lang="eng", desc="", text=[])
-        audio.add(target_frame)
-
-    old_text = target_frame.text[0] if target_frame.text else ""
+    old_text = audio.tags["comment"][0] if audio.tags.get("comment") else ""
 
     if VIBE_PATTERN.search(old_text):
         new_text = VIBE_PATTERN.sub(vibe_str, old_text).strip()
@@ -50,14 +38,14 @@ def sync_vibes_to_file(path: Path, vibes: list[str], dry_run: bool = True) -> bo
     if old_text == new_text:
         return False
 
-    target_frame.text = [new_text]
+    audio.tags["comment"] = [new_text]
 
     print(f"{'DRY-RUN: ' if dry_run else ''}Updating {path.name}")
     print(f"  Old: {old_text}")
     print(f"  New: {new_text}")
 
     if not dry_run:
-        audio.save(path, v2_version=3)
+        audio.save()
 
     return True
 

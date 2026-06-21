@@ -156,6 +156,13 @@ class TaghagDbClient:
     def insert_transition_edges(self, edges: list[dict[str, object]]) -> None:
         self._postgrest_request("transition_edge", edges)
 
+    def upsert_rendition_time_offsets(self, offsets: list[dict[str, object]]) -> None:
+        self._postgrest_request(
+            "rendition_time_offset",
+            offsets,
+            on_conflict="audio_file_id,measured_against_file_id,source_system",
+        )
+
 
     def _audio_file_ids_for_file_keys(self, file_keys: set[str]) -> dict[str, str]:
         if not file_keys:

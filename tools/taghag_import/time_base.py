@@ -26,9 +26,10 @@ skipped (returns ``None``) when that dependency is absent.
 
 Empirical calibration (measured against live data, 2026-06-21): mixonset cues
 land a small *positive* amount after the human grid on the same FLAC -- per
-track in the +12..+18 ms band with MAD <= 3 ms, e.g. track ``3e08a729`` at
-+17.75 ms (MAD 1.25). The offset is a stable small positive per track, not one
-universal constant, which is why it is stored per (canonical, source, system).
+track in the +12..+23 ms band (6 of 11 pairs reconciled; MAD <= 3.8 ms), e.g.
+track ``3e08a729`` at +17.75 ms (MAD 1.25). The offset is a stable small
+positive per track, not one universal constant, which is why it is stored per
+(canonical, source, system).
 """
 
 from __future__ import annotations

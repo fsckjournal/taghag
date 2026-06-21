@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import argparse
 
-from taghag_import.config import DatabaseConfig
+from taghag_import.config import read_database_config
 from taghag_import.db_client import TaghagDbClient
 from taghag_import.time_base import reconcile_offset
 
@@ -49,9 +49,11 @@ def main() -> None:
     ap.add_argument("--dry-run", action="store_true", help="compute, don't write")
     args = ap.parse_args()
 
-    config = DatabaseConfig.from_env()
+    config = read_database_config()
     db = TaghagDbClient(config)
     owner_user_id = config.owner_user_id
+    if not owner_user_id:
+        raise SystemExit("TAGHAG_OWNER_USER_ID must be set to run the backfill.")
 
     pairs = _pairs(db, owner_user_id)
     print(f"Found {len(pairs)} tracks with both human and mixonset cues.")

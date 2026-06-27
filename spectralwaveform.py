@@ -1,131 +1,177 @@
-"""Waveform reduction and repeated-ceiling diagnostics."""
+"""Display a complete audio file with syncopation-tolerant pulse markers."""
 
-from dataclasses import dataclass
+from __future__ import annotations
 
+import argparse
+from pathlib import Path
+from typing import Sequence
+
+import librosa
+import matplotlib.pyplot as plt
 import numpy as np
+import soundfile as sf
+from matplotlib.collections import LineCollection
+from matplotlib.figure import Figure
 from numpy.typing import ArrayLike, NDArray
 
-
-def _immutable_float_array(values: ArrayLike) -> NDArray[np.float64]:
-    array = np.array(values, dtype=np.float64, copy=True)
-    array.setflags(write=False)
-    return array
+DEFAULT_AUDIO_FILE = Path("/Users/g/Desktop/transition_stretch.flac")
 
 
-@dataclass(frozen=True)
-class Envelope:
-    """Per-column waveform extrema and root-mean-square levels."""
-
-    time_seconds: NDArray[np.float64]
-    minimum: NDArray[np.float64]
-    maximum: NDArray[np.float64]
-    rms: NDArray[np.float64]
-
-    def __post_init__(self) -> None:
-        object.__setattr__(
-            self, "time_seconds", _immutable_float_array(self.time_seconds)
-        )
-        object.__setattr__(self, "minimum", _immutable_float_array(self.minimum))
-        object.__setattr__(self, "maximum", _immutable_float_array(self.maximum))
-        object.__setattr__(self, "rms", _immutable_float_array(self.rms))
-
-
-@dataclass(frozen=True)
-class CeilingSpan:
-    """A contiguous time range with a repeatedly reached symmetric ceiling."""
-
-    start_seconds: float
-    end_seconds: float
-    ceiling: float
-
-
-def reduce_envelope(samples: ArrayLike, columns: int) -> Envelope:
-    """Reduce a one-dimensional signal into contiguous display columns."""
+def reduce_waveform(
+    samples: ArrayLike,
+    sample_rate: float,
+    columns: int = 2400,
+) -> tuple[NDArray[np.float64], NDArray[np.float64], NDArray[np.float64]]:
+    """Reduce a signal to peak-preserving display columns."""
 
     signal = np.asarray(samples, dtype=np.float64)
-    if signal.ndim != 1:
-        raise ValueError("samples must be one-dimensional")
+    if signal.ndim != 1 or signal.size == 0:
+        raise ValueError("samples must be a non-empty one-dimensional signal")
+    if sample_rate <= 0:
+        raise ValueError("sample_rate must be positive")
     if columns <= 0:
         raise ValueError("columns must be positive")
-    if signal.size < columns:
-        raise ValueError("columns cannot exceed the number of samples")
 
-    bins = np.array_split(signal, columns)
-    starts = np.cumsum([0, *(len(block) for block in bins[:-1])], dtype=np.float64)
+    bins = np.array_split(signal, min(columns, signal.size))
+    starts = np.cumsum(
+        [0, *(len(block) for block in bins[:-1])],
+        dtype=np.float64,
+    )
+    times = starts / sample_rate
+    minimum = np.array([np.min(block) for block in bins])
+    maximum = np.array([np.max(block) for block in bins])
+    return times, minimum, maximum
 
-    return Envelope(
-        time_seconds=starts,
-        minimum=np.array([np.min(block) for block in bins]),
-        maximum=np.array([np.max(block) for block in bins]),
-        rms=np.array([np.sqrt(np.mean(np.square(block))) for block in bins]),
+
+def plp_pulse_times(
+    samples: ArrayLike,
+    sample_rate: float,
+    hop_length: int = 512,
+) -> NDArray[np.float64]:
+    """Return Predominant Local Pulse maxima as times, not claimed downbeats."""
+
+    signal = np.asarray(samples, dtype=np.float32)
+    if signal.ndim != 1 or signal.size == 0:
+        raise ValueError("samples must be a non-empty one-dimensional signal")
+
+    onset_envelope = librosa.onset.onset_strength(
+        y=signal,
+        sr=sample_rate,
+        hop_length=hop_length,
+    )
+    if onset_envelope.size < 2:
+        return np.array([], dtype=np.float64)
+
+    pulse = librosa.beat.plp(
+        onset_envelope=onset_envelope,
+        sr=sample_rate,
+        hop_length=hop_length,
+        win_length=min(384, onset_envelope.size),
+    )
+    frames = np.flatnonzero(librosa.util.localmax(pulse))
+    return librosa.frames_to_time(
+        frames,
+        sr=sample_rate,
+        hop_length=hop_length,
     )
 
 
-def detect_repeated_ceilings(
-    samples: ArrayLike,
-    sample_rate: float,
-    window_seconds: float = 4.0,
-    minimum_hits: int = 8,
-) -> list[CeilingSpan]:
-    """Find fixed windows that repeatedly hit matching positive/negative extrema."""
+def render_waveform(
+    audio_file: str | Path,
+    columns: int = 2400,
+) -> Figure:
+    """Build the full-duration waveform and PLP marker figure."""
 
-    channels = np.asarray(samples, dtype=np.float64)
-    if channels.ndim != 2:
-        raise ValueError("samples must be a two-dimensional frames-by-channels array")
-    if sample_rate <= 0:
-        raise ValueError("sample_rate must be positive")
-    if window_seconds <= 0:
-        raise ValueError("window_seconds must be positive")
-    if minimum_hits <= 0:
-        raise ValueError("minimum_hits must be positive")
+    path = Path(audio_file).expanduser()
+    channels, sample_rate = sf.read(path, always_2d=True, dtype="float32")
+    if channels.size == 0:
+        raise ValueError(f"audio file is empty: {path}")
 
-    window_frames = int(round(sample_rate * window_seconds))
-    if window_frames <= 0:
-        raise ValueError("window_seconds is too short for the sample rate")
+    mono = np.mean(channels, axis=1)
+    duration = len(mono) / sample_rate
+    times, minimum, maximum = reduce_waveform(
+        mono,
+        sample_rate=sample_rate,
+        columns=columns,
+    )
+    pulses = plp_pulse_times(mono, sample_rate)
 
-    spans: list[CeilingSpan] = []
-    total_frames = channels.shape[0]
-    for start_frame in range(0, total_frames, window_frames):
-        end_frame = min(start_frame + window_frames, total_frames)
-        window = channels[start_frame:end_frame]
-        if window.size == 0:
-            continue
+    figure, (waveform_axis, pulse_axis) = plt.subplots(
+        2,
+        1,
+        figsize=(16, 7),
+        sharex=True,
+        gridspec_kw={"height_ratios": (9, 1), "hspace": 0.04},
+        facecolor="#111318",
+    )
 
-        matching_ceilings = []
-        for channel in window.T:
-            ceiling = float(np.max(channel))
-            floor = float(np.min(channel))
-            if (
-                ceiling > 0.0
-                and floor == -ceiling
-                and np.count_nonzero(channel == ceiling) >= minimum_hits
-                and np.count_nonzero(channel == floor) >= minimum_hits
-            ):
-                matching_ceilings.append(ceiling)
-        if not matching_ceilings:
-            continue
-        ceiling = max(matching_ceilings)
+    segments = np.stack(
+        (
+            np.column_stack((times, minimum)),
+            np.column_stack((times, maximum)),
+        ),
+        axis=1,
+    )
+    waveform_axis.add_collection(
+        LineCollection(segments, colors="#777dff", linewidths=1.0)
+    )
+    waveform_axis.axhline(0.0, color="#aeb2ff", linewidth=0.5, alpha=0.45)
+    waveform_axis.set_xlim(0.0, duration)
+    waveform_axis.set_ylim(-1.05, 1.05)
+    waveform_axis.set_ylabel("Amplitude")
+    waveform_axis.set_title(path.name, color="#f2f3f5", pad=12)
 
-        start_seconds = start_frame / sample_rate
-        end_seconds = end_frame / sample_rate
-        if (
-            spans
-            and spans[-1].end_seconds == start_seconds
-            and spans[-1].ceiling == ceiling
-        ):
-            previous = spans[-1]
-            spans[-1] = CeilingSpan(
-                start_seconds=previous.start_seconds,
-                end_seconds=end_seconds,
-                ceiling=ceiling,
-            )
-        else:
-            spans.append(
-                CeilingSpan(
-                    start_seconds=start_seconds,
-                    end_seconds=end_seconds,
-                    ceiling=ceiling,
-                )
-            )
+    pulse_axis.vlines(pulses, 0.15, 0.85, color="#ff9f1c", linewidth=0.8)
+    pulse_axis.scatter(
+        pulses,
+        np.full_like(pulses, 0.5),
+        color="#ffb347",
+        edgecolors="#4d2b00",
+        linewidths=0.4,
+        s=15,
+        zorder=3,
+    )
+    pulse_axis.set_ylim(0.0, 1.0)
+    pulse_axis.set_yticks([])
+    pulse_axis.set_xlabel("Time (seconds)")
+    pulse_axis.set_ylabel("PLP", rotation=0, labelpad=18, va="center")
 
-    return spans
+    for axis in (waveform_axis, pulse_axis):
+        axis.set_facecolor("#20232a")
+        axis.tick_params(colors="#c9ccd3")
+        axis.xaxis.label.set_color("#c9ccd3")
+        axis.yaxis.label.set_color("#c9ccd3")
+        for spine in axis.spines.values():
+            spine.set_color("#3b3f48")
+
+    figure.subplots_adjust(left=0.06, right=0.99, top=0.93, bottom=0.09)
+    return figure
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        description="Show a full audio waveform with PLP pulse markers."
+    )
+    parser.add_argument(
+        "audio_file",
+        nargs="?",
+        type=Path,
+        default=DEFAULT_AUDIO_FILE,
+        help=f"audio file to display (default: {DEFAULT_AUDIO_FILE})",
+    )
+    return parser
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    parser = build_parser()
+    arguments = parser.parse_args(argv)
+    try:
+        render_waveform(arguments.audio_file)
+    except (OSError, RuntimeError, ValueError) as error:
+        parser.error(str(error))
+    plt.show()
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

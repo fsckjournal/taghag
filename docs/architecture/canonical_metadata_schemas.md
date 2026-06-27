@@ -156,7 +156,7 @@ Our audit found defects in the metadata sanitizer (`sanitize_roon_metadata.py`) 
   
   This ensures that a 1-artist album without `album_artist` still gets that artist set as album artist. All changes preserve the intended logic but fix edge cases.
 
-> **Note:** Original sanitizer code and refactored examples are in [tagslut/sanitize_roon_metadata.py](https://github.com/tagslut-org/tagslut/blob/main/tools/review/sanitize_roon_metadata.py) (see functions at **L357–363, L885–889, L845–853**).
+> **Note:** Original sanitizer code and refactored examples are in [tagslut/sanitize_roon_metadata.py](https://github.com/fsckjournal/tagslut/blob/main/tools/review/sanitize_roon_metadata.py) (see functions at **L357–363, L885–889, L845–853**).
 
 ## 6. Cryptographic Audio Integrity
 

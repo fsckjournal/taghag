@@ -148,7 +148,7 @@ let roon = new RoonApi({
     display_version: '0.1.0',
     publisher:      'Your Name',
     email:          'you@example.com',
-    website:        'https://github.com/tagslut-org/tagslut'
+    website:        'https://github.com/fsckjournal/tagslut'
 });
 
 let status = new RoonApiStatus(roon);
@@ -267,4 +267,3 @@ Several open-source Roon extensions illustrate these approaches:
 Each of these can be studied for UI patterns (using RoonApiBrowse to create menus), zone subscriptions, and node<->python communication.  For example, Roon Web Controller’s `README` shows starting a Node server and enabling the extension.
 
 In summary, the bridge architecture is: **Roon UI (Node extension) ↔ IPC ↔ Tagslut (Python)**. Node’s Roon API handles user input and Roon events; Tagslut (CLI or API) does the heavy lifting on files.  The diagram and code above outline this flow. Using these patterns, Tagslut’s enrich-and-update commands can be seamlessly triggered from within Roon, giving a frictionless workflow for metadata curation.
-

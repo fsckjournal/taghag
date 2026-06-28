@@ -46,8 +46,22 @@ tools/forensic/snapshots/
 *.flac
 out.txt
 
-# Secret-bearing transcripts / conversation dumps — NEVER commit (contain creds)
-*local-command-caveat*.txt
+# Transcripts, chatlogs, conversation/data dumps — NEVER commit (may carry creds).
+# Broad ignore of dump file types; essential tracked configs re-included below.
+chatlogs/
+*.jsonl
+*.txt
+*.json
 Building Automated Beatmatched Mixer*.md
 THE_MASTER_RECORD.md
-chatlogs/2026-06-17_taghag_planning_and_review.jsonl
+
+# Re-include essential tracked config / build / data files that match the above:
+!.vscode/settings.json
+!tools/neighborhood.json
+!tools/taghag_import/genre_rules.json
+!tools/tests/fixtures/iwebdj_payloads.json
+!web/package-lock.json
+!web/package.json
+!web/tsconfig.json
+!archive/raw_dumps/172.txt
+!pool_metadata_backup.jsonl

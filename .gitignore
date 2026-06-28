@@ -65,3 +65,10 @@ THE_MASTER_RECORD.md
 !web/tsconfig.json
 !archive/raw_dumps/172.txt
 !pool_metadata_backup.jsonl
+!.mcp.json
+!server/package.json
+!server/package-lock.json
+
+# Committed sample input set for the mixer (intentional binaries — see its README)
+!tools/mixslice/samples/
+!tools/mixslice/samples/**

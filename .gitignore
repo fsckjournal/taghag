@@ -45,3 +45,9 @@ tools/forensic/snapshots/
 # Rendered mix audio / scratch outputs
 *.flac
 out.txt
+
+# Secret-bearing transcripts / conversation dumps — NEVER commit (contain creds)
+*local-command-caveat*.txt
+Building Automated Beatmatched Mixer*.md
+THE_MASTER_RECORD.md
+chatlogs/2026-06-17_taghag_planning_and_review.jsonl

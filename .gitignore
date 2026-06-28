@@ -38,3 +38,10 @@ archive/raw_dumps/172_utf8.txt
 
 # Local raw capture dumps
 archive/raw_dumps/*.har
+
+# Forensic DB snapshots — large personal databases (~2.4 GB), never commit
+tools/forensic/snapshots/
+
+# Rendered mix audio / scratch outputs
+*.flac
+out.txt

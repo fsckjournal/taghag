@@ -54,11 +54,14 @@ If it answers *"what does it sound like / how does it mix"* → Taghag.
 - RLS on every table (already true). Secret key server-side only; web uses `VITE_*`/publishable.
 - Run `get_advisors` (security + performance) after any DDL.
 
-## Known residue to clean (both projects empty → free to fix)
+## Known residue — cleaned
 
-- `track_analysis` table comment is stale: *"Essentia/Magikbox analysis for local MP3 files"*
-  → MP3 + the dead name "Magikbox". Fix or drop the table (Open decision #3). Propose as a
-  migration; do not hand-edit.
+- ~~`track_analysis` comment stale ("Essentia/Magikbox analysis for local MP3 files")~~ —
+  **fixed** by migration `20260629000000_recomment_track_analysis_flac.sql` (FLAC, no dead
+  names). The table is **kept** (Open decision #3 resolved): it's the live store the
+  similarity engine reads `sonic7_v1` from — `db_client.upsert_track_analysis` writes it,
+  `similarity/sonic_discovery.py` + `human_correction.py` read it. NOT superseded by the
+  Apple lineage; the two coexist (sonic7 vectors vs Apple MIR).
 
 ## Open decisions (for Georges — not legislated here)
 
@@ -69,10 +72,15 @@ If it answers *"what does it sound like / how does it mix"* → Taghag.
    (mix-prep)? Decide and move `transcode` accordingly.
 2. **Who ingests DJ-app evidence** (Rekordbox `rbx-re.xml`, MIK cues, Beatport)? Currently
    read in Taghag. Is that identity/provenance (slut) or understanding input (hag)?
-3. **Fate of legacy `track_analysis`** — drop it (Apple lineage supersedes it), or repurpose
-   + re-comment it as a non-Apple/Essentia path you still want?
+3. ~~**Fate of legacy `track_analysis`**~~ — **RESOLVED: keep.** It's live (similarity reads
+   `sonic7_v1` from it); not legacy. Comment fixed via migration. See above.
 
 ## Scope note
 
-This split spans both repos. Consider mirroring this doc into the `slut` repo so the
-backbone side records the same boundary.
+This split spans both repos and is recorded on both sides:
+- **slut** `docs/decisions/0010-tagslut-taghag-analysis-boundary.md` — semantic ownership
+  (provider BPM/key vs measured values; exchange via neutral JSON keyed by identity).
+- **slut** `docs/decisions/0011-data-layer-invariants.md` — the data-hygiene invariants
+  mirrored from this doc (FLAC-only, metadata-only, migrations-only, manual intake).
+- **hag** (this doc) — the structural split + anti-monster rules. Authoritative for the
+  data-layer invariants; keep the two repos in sync.

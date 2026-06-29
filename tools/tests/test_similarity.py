@@ -5,11 +5,11 @@ from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 
-import cuecifer.crates as crates
-import cuecifer.human_correction as human_correction
-import cuecifer.map as cuecifer_map
-import cuecifer.sonic_discovery as sonic_discovery
-import cuecifer.sync_vibes as sync_vibes
+import similarity.crates as crates
+import similarity.human_correction as human_correction
+import similarity.map as similarity_map
+import similarity.sonic_discovery as sonic_discovery
+import similarity.sync_vibes as sync_vibes
 import pytest
 from taghag_import.config import DatabaseConfig
 
@@ -81,7 +81,7 @@ def _build_index(*, raw_json: dict[str, object] | None = None) -> sonic_discover
     )
     config = DatabaseConfig(
         supabase_url="https://example.supabase.co",
-        service_role_key="service-role",
+        secret_key="service-role",
         database_url="postgresql://example",
         owner_user_id="owner",
     )
@@ -169,7 +169,7 @@ def test_generate_neighborhood_crate_writes_playlist(tmp_path: Path, monkeypatch
     monkeypatch.setattr(crates, "SonicDiscoveryIndex", FakeIndex)
     monkeypatch.setattr(crates, "read_database_config", lambda: DatabaseConfig(
         supabase_url="https://example.supabase.co",
-        service_role_key="service-role",
+        secret_key="service-role",
         database_url="postgresql://example",
         owner_user_id="owner",
     ))
@@ -184,7 +184,7 @@ def test_generate_neighborhood_crate_writes_playlist(tmp_path: Path, monkeypatch
 
 def test_generate_map_writes_json_and_csv(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setattr(
-        cuecifer_map,
+        similarity_map,
         "_load_rows",
         lambda: [
             {
@@ -204,7 +204,7 @@ def test_generate_map_writes_json_and_csv(tmp_path: Path, monkeypatch) -> None:
         ],
     )
 
-    json_out, csv_out = cuecifer_map.generate_map(tmp_path)
+    json_out, csv_out = similarity_map.generate_map(tmp_path)
 
     assert json_out.exists()
     assert csv_out.exists()
@@ -246,7 +246,7 @@ def test_apply_corrections_upserts_track_curation(tmp_path: Path, monkeypatch) -
 
     monkeypatch.setattr(human_correction, "read_database_config", lambda: DatabaseConfig(
         supabase_url="https://example.supabase.co",
-        service_role_key="service-role",
+        secret_key="service-role",
         database_url="postgresql://example",
         owner_user_id="owner",
     ))

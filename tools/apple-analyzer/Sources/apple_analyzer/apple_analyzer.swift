@@ -3,11 +3,11 @@ import AVFoundation
 import MusicUnderstanding
 
 @main
-struct CueciferAnalyzer {
+struct AppleAnalyzer {
     static func main() async throws {
         let args = CommandLine.arguments
         guard args.count >= 2 else {
-            fputs("Usage: cuecifer-analyzer <path-to-flac-file-or-m3u>\n", stderr)
+            fputs("Usage: apple-analyzer <path-to-flac-file-or-m3u>\n", stderr)
             exit(1)
         }
         
@@ -61,7 +61,7 @@ struct CueciferAnalyzer {
     }
     
     static func processTrack(fileURL: URL, printToConsole: Bool) async throws {
-        let cachePath = fileURL.appendingPathExtension("cuecifer.json").path
+        let cachePath = fileURL.appendingPathExtension("analyzer.json").path
         if FileManager.default.fileExists(atPath: cachePath) {
             if !printToConsole {
                 print("Cache exists for \(fileURL.lastPathComponent). Skipping.")

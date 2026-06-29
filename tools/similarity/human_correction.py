@@ -16,8 +16,8 @@ if __package__ in {None, ""}:
 
 from taghag_import.config import read_database_config
 
-from cuecifer.db import dict_cursor, open_database
-from cuecifer.sonic_discovery import VECTOR_SCHEMA
+from similarity.db import dict_cursor, open_database
+from similarity.sonic_discovery import VECTOR_SCHEMA
 
 
 TS_VIBE_PATTERN = re.compile(r"\[TS:\s*(.*?)\]")
@@ -265,7 +265,7 @@ def audit_conflicts(*, out: Path) -> Path:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Apply or audit human Cuecifer vibe corrections")
+    parser = argparse.ArgumentParser(description="Apply or audit human sonic vibe corrections")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     apply_parser = subparsers.add_parser("apply", help="Apply human vibe corrections from MP3 comments")

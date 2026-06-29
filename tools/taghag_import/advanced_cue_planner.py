@@ -257,7 +257,7 @@ class BeamState:
     last_audio_file_id: str
 
 
-class ButterFlowPlanner:
+class TransitionPlanner:
     def __init__(self, db_client: TaghagDbClient) -> None:
         self.db_client = db_client
         self.config = db_client._config

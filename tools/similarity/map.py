@@ -13,8 +13,8 @@ if __package__ in {None, ""}:
 
 from taghag_import.config import read_database_config
 
-from cuecifer.db import dict_cursor, open_database
-from cuecifer.sonic_discovery import VECTOR_SCHEMA, _parse_vector_literal
+from similarity.db import dict_cursor, open_database
+from similarity.sonic_discovery import VECTOR_SCHEMA, _parse_vector_literal
 
 
 def _vector_mean(vectors: list[list[float]]) -> list[float]:
@@ -186,8 +186,8 @@ def generate_map(output_dir: str | Path) -> tuple[Path, Path]:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Generate a simple 2D map from Cuecifer vectors")
-    parser.add_argument("--out-dir", type=Path, default=Path("artifacts/cuecifer_map"), help="Output directory")
+    parser = argparse.ArgumentParser(description="Generate a simple 2D map from sonic vectors")
+    parser.add_argument("--out-dir", type=Path, default=Path("artifacts/similarity_map"), help="Output directory")
     return parser
 
 

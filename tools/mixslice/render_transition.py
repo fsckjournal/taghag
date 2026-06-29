@@ -2,7 +2,7 @@
 """Render one beatmatched crossfade transition between two FLAC tracks.
 
 Vertical slice for the automated beatmatched mixer. Uses the native
-cuecifer-analyzer JSON (FLAC-anchored beat grid + 32-beat section phrasing) to:
+apple-analyzer JSON (FLAC-anchored beat grid + 32-beat section phrasing) to:
 
   1. pick a 32-beat "section" boundary in the outgoing track (mix-out) and the
      incoming track (mix-in), snapped to the nearest real beat;

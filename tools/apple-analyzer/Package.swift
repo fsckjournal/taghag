@@ -4,20 +4,20 @@
 import PackageDescription
 
 let package = Package(
-    name: "cuecifer-analyzer",
+    name: "apple-analyzer",
     platforms: [.macOS("27.0")],
     targets: [
         // Targets are the basic building blocks of a package, defining a module or a test suite.
         // Targets can depend on other targets in this package and products from dependencies.
         .executableTarget(
-            name: "cuecifer_analyzer",
+            name: "apple_analyzer",
             swiftSettings: [
                 .enableUpcomingFeature("ApproachableConcurrency"),
             ],
         ),
         .testTarget(
-            name: "cuecifer_analyzerTests",
-            dependencies: ["cuecifer_analyzer"],
+            name: "apple_analyzerTests",
+            dependencies: ["apple_analyzer"],
             swiftSettings: [
                 .enableUpcomingFeature("ApproachableConcurrency"),
             ],

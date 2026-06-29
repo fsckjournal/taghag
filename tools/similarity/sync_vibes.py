@@ -14,8 +14,8 @@ if __package__ in {None, ""}:
 
 from taghag_import.config import read_database_config
 
-from cuecifer.db import dict_cursor, open_database
-from cuecifer.sonic_discovery import VECTOR_SCHEMA
+from similarity.db import dict_cursor, open_database
+from similarity.sonic_discovery import VECTOR_SCHEMA
 
 
 VIBE_PREFIX = "[TS:"
@@ -108,7 +108,7 @@ def sync_all(*, execute: bool = False) -> int:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Sync resolved Cuecifer vibes to MP3 ID3 comments")
+    parser = argparse.ArgumentParser(description="Sync resolved sonic vibes to MP3 ID3 comments")
     parser.add_argument("--execute", action="store_true", help="Actually write tags (default is dry-run)")
     return parser
 

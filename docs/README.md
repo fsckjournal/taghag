@@ -2,6 +2,8 @@
 
 Welcome to the Taghag documentation repository. The documentation has been sorted into four functional domains to help you find what you're looking for quickly.
 
+> **Start with [GLOSSARY.md](GLOSSARY.md)** — the canonical vocabulary (every term, tool, and pipeline stage). It overrides any older doc that uses legacy names (`cuecifer`, `magikbox`, `butterflow`).
+
 ## 📂 `architecture/`
 Contains high-level system design, database schemas, and integration specifications.
 - `additional_sources.md` - Research notes on handling additional audio sources in Roon.
@@ -31,6 +33,7 @@ Contains deep-dive technical reports, intelligence engine whitepapers, and phase
 Contains project planning and historical milestone briefs.
 - `manifest_stage_plan.md` - Implementation plan for the manifest stage.
 - `taghag_stage_pipeline_plan.md` - Implementation plan for the stage pipeline.
+- `roon_playlist_smallest_outcome_plan.md` - Plan to deliver one identity-anchored, harmonically-ordered playlist that plays in Roon, grounded in the live `cuecifer`/`cue` CLI surfaces and Tagslut's playlist resolver/renderer.
 
 ## 📂 `archive/`
 Contains historically obsolete execution plans and legacy MP3/Rekordbox-era designs. Agents should ignore these unless instructed otherwise.

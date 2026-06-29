@@ -66,7 +66,7 @@ string via `DB_POSTGRES_URL` or `TAGHAG_DB_POSTGRES_URL` plus
 
 ## Run Apple Music Understanding analysis
 
-Analyze registered FLACs with the local Cuecifer Swift analyzer. Dry run prints
+Analyze registered FLACs with the local apple-analyzer (Swift). Dry run prints
 the first analyzer JSON without mutating Supabase:
 
 ```bash

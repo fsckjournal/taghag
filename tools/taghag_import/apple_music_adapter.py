@@ -12,7 +12,7 @@ from .db_client import TaghagDbClient
 from .flac import probe_flac, sha256_file
 from .mik_xml_adapter import get_mik_bpm
 
-SWIFT_CLI_PATH = Path(__file__).parent.parent / "cuecifer-analyzer" / ".build" / "release" / "cuecifer_analyzer"
+SWIFT_CLI_PATH = Path(__file__).parent.parent / "apple-analyzer" / ".build" / "release" / "apple_analyzer"
 
 
 def _has_drum_activity(instrument_activity: dict[str, object], threshold: float = 0.05, min_active_ratio: float = 0.1) -> bool:
@@ -232,7 +232,7 @@ def run_apple_music_ingestion(
                     "audio_file_id": audio_file_id,
                     "source_artifact_sha256": source_artifact_sha256,
                     "source_path": str(path),
-                    "analyzer": "cuecifer-analyzer",
+                    "analyzer": "apple-analyzer",
                     "raw_result_json": data,
                 }
             ]

@@ -17,7 +17,7 @@ def connect_database(config: DatabaseConfig | None = None):
     config = config or load_database_config()
     if not config.database_url:
         raise RuntimeError(
-            "TAGHAG_DB_POSTGRES_URL, DB_POSTGRES_URL, or DATABASE_URL is required for Cuecifer DB access"
+            "TAGHAG_DB_POSTGRES_URL, DB_POSTGRES_URL, or DATABASE_URL is required for similarity engine DB access"
         )
     return psycopg2.connect(config.database_url)
 

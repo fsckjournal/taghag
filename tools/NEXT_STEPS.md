@@ -86,7 +86,7 @@ Plan (worked out, ready to implement):
 
 `sync_vibes_to_file()` currently opens `mutagen.id3.ID3`, finds/creates a COMM frame, regex-replaces
 a `[TS: ...]` substring in its text, saves via `audio.save(path, v2_version=3)`. Wired to the live
-`cuecifer sync-id3 --execute` CLI command (`cli.py` lines ~979-981, ~1214).
+`similarity sync-id3 --execute` CLI command (`cli.py` lines ~979-981, ~1214).
 
 Fix: same regex find/replace logic, but against a Vorbis `"comment"` field (matches `flac.py`'s
 reader, which does `first("comment", "description")`):
@@ -107,13 +107,13 @@ Keep `VIBE_PREFIX`/`VIBE_PATTERN`/`sync_postgres_vibes_to_id3()` untouched — o
 guts of `sync_vibes_to_file()` change. No test currently exists for this file — add one using a
 real FLAC fixture (see `real_flac_factory` in `conftest.py`).
 
-### 3. `cuecifer/sync_vibes.py` (not started, approved — confirmed NOT dead code)
+### 3. `similarity/sync_vibes.py` (not started, approved — confirmed NOT dead code)
 
 Near-duplicate of file 2 above, but standalone (queries Postgres directly via
-`cuecifer.db.open_database`/`dict_cursor`, not `TaghagDbClient`), not wired into
+`similarity.db.open_database`/`dict_cursor`, not `TaghagDbClient`), not wired into
 `pyproject.toml` `[project.scripts]`, but independently runnable
-(`python -m cuecifer.sync_vibes --execute`) and directly tested by
-`tests/test_cuecifer.py::test_sync_vibes_to_file_rewrites_existing_comment` (which currently
+(`python -m similarity.sync_vibes --execute`) and directly tested by
+`tests/test_similarity.py::test_sync_vibes_to_file_rewrites_existing_comment` (which currently
 monkeypatches `sync_vibes.ID3` directly — same blind spot that hid the original bug). Apply the
 identical fix as file 2 (same Vorbis `"comment"` field, same regex logic), keeping its own
 `*, dry_run: bool = True` keyword-only signature as-is. Update that test to use a real FLAC
@@ -135,7 +135,7 @@ fixture instead of monkeypatching `ID3`.
 - Don't lose coverage of: dry-run-by-default, force-overwrite-only-requested-field,
   reject-multi-value-ISRC, accept-single-valid-ISRC (all currently tested against the ID3 path —
   port the same assertions onto the Vorbis path).
-- Update `test_cuecifer.py`'s `test_sync_vibes_to_file_rewrites_existing_comment` per above.
+- Update `test_similarity.py`'s `test_sync_vibes_to_file_rewrites_existing_comment` per above.
 - Add a new test file/cases for `sync_vibes_to_id3.py` (none exist today).
 
 ## Final step

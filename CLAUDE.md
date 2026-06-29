@@ -22,10 +22,10 @@ taghag/
 │   │   ├── apple_*.py        # Apple Music Understanding integration (MIR analysis)
 │   │   ├── beatport_*.py     # Provider resolver & auth
 │   │   ├── audio_*.py        # Audio probing and auditing
-│   │   ├── cuecifer/         # Sonic similarity and crate generation
 │   │   └── tests/            # pytest test suite
-│   ├── cuecifer/             # Generative crate logic & harmonic pathfinding
-│   ├── cuecifer-analyzer/    # Swift analyzer wrapper (Apple MusicUnderstanding.framework)
+│   ├── similarity/           # Sonic similarity & crate generation (pgvector); was "cuecifer"
+│   ├── apple-analyzer/       # Swift Apple-MIR analyzer (MusicUnderstanding.framework); was "cuecifer-analyzer"
+│   ├── mixslice/             # Beatmatched-mix renderer (grid_mix, chain_mix)
 │   └── pyproject.toml        # Python package definition
 ├── web/                       # React/Vite frontend (read-only view, minimal)
 │   ├── src/
@@ -46,7 +46,7 @@ taghag/
 
 ### Audio Analysis Pipeline
 
-1. **Apple Music Understanding (Cuecifer)**: Native Swift analyzer produces deterministic MIR:
+1. **Apple-analyzer** (Swift, wraps Apple Music Understanding): produces deterministic MIR:
    - BPM, key, key-change ranges
    - Beats, bars, segments
    - Instrument and vocal-intensity activity
@@ -56,7 +56,7 @@ taghag/
    - Raw MIR → interpretable scalars (pace mean/volatility, key stability, vocal intensity, BPM agreement)
    - `apple_hybrid_v1` vector for pgvector storage
 
-3. **Sonic Similarity & Generative Crates** (`cuecifer/`):
+3. **Sonic Similarity & Generative Crates** (`similarity/`):
    - Similarity search over `sonic7_v1` + `apple_hybrid_v1` vectors
    - Harmonic transition scoring (pace delta, vocal overlap, loudness, BPM disagreement, key instability)
    - Seed track → neighborhood → crate
@@ -205,14 +205,16 @@ taghag-import provider-evidence \
 | Module | Purpose | Key Files |
 | --- | --- | --- |
 | **CLI** | Command-line interface | `cli.py` (main entry) |
-| **Apple Analysis** | MIR extraction & feature engineering | `apple_*.py` (5 files) |
-| **Cuecifer** | Sonic similarity & harmonic mixing | `cuecifer/`, `apple_handoff.py` |
+| **Apple Analysis** | MIR extraction & feature engineering | `apple-analyzer/` (Swift), `apple_*.py` |
+| **Similarity** | Sonic similarity, crates & transition scoring | `similarity/`, `advanced_cue_planner.py`, `apple_handoff.py` |
+| **Mixslice** | Beatmatched-mix renderer (grid-based, wobble-free) | `mixslice/grid_mix.py`, `mixslice/chain_mix.py` |
 | **Audio Audit** | Metadata extraction & quality checking | `audio_audit.py`, `audio_probe.py` |
 | **Provider Evidence** | ISRC lookups via Postman | `beatport_*.py`, `provider_evidence.py` |
 | **Tests** | pytest suite | `tools/tests/test_*.py` |
 
 ## Important Files & Docs
 
+- **[docs/GLOSSARY.md](docs/GLOSSARY.md)** — Canonical vocabulary: every term/tool/stage. Read first; it overrides older docs.
 - **[README.md](README.md)** — High-level overview (update this if scope changes)
 - **[AGENT.md](AGENT.md)** — Agent workspace rules (clean-room, FLAC-native)
 - **[docs/architecture/roon_extension_architecture.md](docs/architecture/roon_extension_architecture.md)** — System philosophy, two-layer design
@@ -225,4 +227,5 @@ taghag-import provider-evidence \
 - **Taghag is read-only on Tagslut**: Taghag's join keys (ISRC, content_sha256) reference Tagslut's authoritative identity, but Taghag never writes to Tagslut.
 - **Apple MusicUnderstanding is closed-source**: The analyzer requires a built Swift binary and macOS 26/27+; reproducibility and portability are known risks.
 - **Product shape still crystallizing**: Backend (Taghag's analysis engine) is mature; frontend (React web UI) and Roon integration are minimal. Per Opus, the smallest next outcome is one identity-anchored, harmonically ordered playlist that plays in Roon.
-- **Memory index**: Check `/Users/g/.claude/projects/-Users-g-Projects-taghag/memory/MEMORY.md` for ongoing feature context (time-base anchor, Beatport HAR secrets, etc.).
+- **Memory index**: Check `/Users/g/.claude/projects/-Users-g-Projects-tag-hag/memory/MEMORY.md` for ongoing feature context (time-base anchor, Beatport HAR secrets, etc.).
+- **Repo location moved**: this repo lives at `~/Projects/tag/hag` (was `~/Projects/taghag`). The sibling identity repo `tagslut` now lives at `~/Projects/tag/slut` (was `~/Projects/tagslut`), and its database directory is `~/Projects/tag/slut_db` (was `~/Projects/tagslut_db`).

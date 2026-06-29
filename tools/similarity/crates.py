@@ -10,7 +10,7 @@ if __package__ in {None, ""}:
 
 from taghag_import.config import read_database_config
 
-from cuecifer.sonic_discovery import SonicDiscoveryIndex
+from similarity.sonic_discovery import SonicDiscoveryIndex
 
 
 def generate_neighborhood_crate(seed_path: str, *, limit: int = 30, out_dir: Path = Path(".")) -> Path:
@@ -35,7 +35,7 @@ def generate_neighborhood_crate(seed_path: str, *, limit: int = 30, out_dir: Pat
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Generate a neighborhood crate playlist from Cuecifer vectors")
+    parser = argparse.ArgumentParser(description="Generate a neighborhood crate playlist from sonic vectors")
     parser.add_argument("--seed", required=True, help="Absolute path to the seed track")
     parser.add_argument("--limit", type=int, default=30, help="Number of tracks to include")
     parser.add_argument("--out-dir", type=Path, default=Path("."), help="Output directory for the playlist")

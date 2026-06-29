@@ -17,7 +17,7 @@ if __package__ in {None, ""}:
 
 from taghag_import.config import DatabaseConfig, read_database_config
 
-from cuecifer.db import dict_cursor, open_database
+from similarity.db import dict_cursor, open_database
 
 
 VECTOR_SCHEMA = "sonic7_v1"
@@ -473,7 +473,7 @@ class SonicDiscoveryIndex:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Cuecifer sonic discovery engine")
+    parser = argparse.ArgumentParser(description="Sonic discovery engine")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     subparsers.add_parser("recompute-all", help="Recompute and upsert every track_embedding row for the owner")

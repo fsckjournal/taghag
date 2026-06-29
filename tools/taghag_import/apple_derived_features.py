@@ -1,6 +1,6 @@
 """Deterministic feature engineering from Apple Music Understanding raw JSON.
 
-Computes derived scalars from the cuecifer JSON output, following the
+Computes derived scalars from the apple-analyzer JSON output, following the
 architecture doc's Phase 4 recommendations. No LLMs, no ML - pure math
 on Apple's deterministic MIR outputs.
 """
@@ -19,7 +19,7 @@ def compute_derived_features(
     filename: str = "",
     reference_bpm: float | None = None,
 ) -> dict[str, Any]:
-    """Compute all derived features from a single cuecifer JSON payload.
+    """Compute all derived features from a single apple-analyzer JSON payload.
 
     Returns a flat dict of scalar features suitable for database storage.
     """
@@ -316,7 +316,7 @@ def _bpm_agreement_score(apple_bpm: float | None, reference_bpm: float | None) -
 
 
 def compute_features_from_file(json_path: Path, filename: str = "") -> dict[str, Any] | None:
-    """Load a cuecifer JSON file and compute derived features."""
+    """Load a apple-analyzer JSON file and compute derived features."""
     try:
         with open(json_path, "r", encoding="utf-8") as f:
             raw = json.load(f)

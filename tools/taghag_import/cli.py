@@ -46,7 +46,7 @@ from .beatport_resolver import BeatportResolver
 from .generate_neighborhood_crate import CrateGenerator
 from .apply_human_correction import apply_human_corrections
 from .sync_vibes_to_id3 import sync_postgres_vibes_to_id3
-from .advanced_cue_planner import AnlzImporter, SegmentExtractor, ButterFlowPlanner, LIBROSA_AVAILABLE, PYREKORDBOX_AVAILABLE
+from .advanced_cue_planner import AnlzImporter, SegmentExtractor, TransitionPlanner, LIBROSA_AVAILABLE, PYREKORDBOX_AVAILABLE
 from .apple_disagreement_report import load_apple_disagreement_rows, write_apple_disagreement_csv
 from .mixonset import MixonsetImporter
 from .apple_music_adapter import run_apple_music_ingestion
@@ -94,7 +94,7 @@ def _apply_resolved_evidence(dj_tag: dict[str, object], resolved: ResolvedTags) 
 
     Provider bpm/musical_key (e.g. Beatport catalog values) are intentionally
     excluded: dj_tag.bpm/musical_key stay sourced from the measured/local
-    tags, since Butter Flow's BPM-disagreement and key-stability cost terms
+    tags, since the transition planner's BPM-disagreement and key-stability cost terms
     depend on comparing measured values against provider/Apple evidence, not
     on having that evidence overwrite the measurement.
     """
@@ -977,28 +977,28 @@ def build_parser() -> argparse.ArgumentParser:
     provider_smoke.add_argument("--track-id", default="4862171", help="Sample Beatport track ID to check")
     provider_smoke.set_defaults(func=_provider_smoke)
 
-    # 5. Cuecifer Sub-interface
-    cuecifer = subparsers.add_parser("cuecifer", help="Cuecifer classification and crate commands")
-    cuecifer_sub = cuecifer.add_subparsers(dest="subcommand", required=True)
+    # 5. Similarity Sub-interface
+    similarity = subparsers.add_parser("similarity", help="Sonic similarity and crate commands")
+    similarity_sub = similarity.add_subparsers(dest="subcommand", required=True)
     
-    mag_similar = cuecifer_sub.add_parser("similar", help="Find similar tracks in database")
-    mag_similar.add_argument("--track-id", required=True, help="Database audio_file ID")
-    mag_similar.add_argument("--limit", type=int, default=10, help="Max candidates")
+    sim_similar = similarity_sub.add_parser("similar", help="Find similar tracks in database")
+    sim_similar.add_argument("--track-id", required=True, help="Database audio_file ID")
+    sim_similar.add_argument("--limit", type=int, default=10, help="Max candidates")
     
-    mag_crate = cuecifer_sub.add_parser("crate", help="Generate neighborhood playlist/crate")
-    mag_crate.add_argument("--seed-id", required=True, help="Database audio_file ID of seed track")
-    mag_crate.add_argument("--out-dir", default="artifacts/crates", help="Output directory for playlist")
-    mag_crate.add_argument("--limit", type=int, default=30, help="Max tracks in crate")
+    sim_crate = similarity_sub.add_parser("crate", help="Generate neighborhood playlist/crate")
+    sim_crate.add_argument("--seed-id", required=True, help="Database audio_file ID of seed track")
+    sim_crate.add_argument("--out-dir", default="artifacts/crates", help="Output directory for playlist")
+    sim_crate.add_argument("--limit", type=int, default=30, help="Max tracks in crate")
     
-    mag_correct = cuecifer_sub.add_parser("correct", help="Apply human qualitative corrections from ID3 tags")
-    mag_correct.add_argument("--music-dir", required=True, help="Base music library directory")
-    mag_correct.add_argument("--execute", action="store_true", help="Apply changes directly to Supabase")
+    sim_correct = similarity_sub.add_parser("correct", help="Apply human qualitative corrections from ID3 tags")
+    sim_correct.add_argument("--music-dir", required=True, help="Base music library directory")
+    sim_correct.add_argument("--execute", action="store_true", help="Apply changes directly to Supabase")
     
-    mag_sync_id3 = cuecifer_sub.add_parser("sync-id3", help="Sync Supabase vibes back to ID3 tags")
-    mag_sync_id3.add_argument("--music-dir", required=True, help="Base music library directory")
-    mag_sync_id3.add_argument("--execute", action="store_true", help="Apply tag modifications to MP3 files")
+    sim_sync_id3 = similarity_sub.add_parser("sync-id3", help="Sync Supabase vibes back to ID3 tags")
+    sim_sync_id3.add_argument("--music-dir", required=True, help="Base music library directory")
+    sim_sync_id3.add_argument("--execute", action="store_true", help="Apply tag modifications to MP3 files")
     
-    cuecifer.set_defaults(func=_cuecifer_command)
+    similarity.set_defaults(func=_similarity_command)
 
     # 6. Cue Sub-interface
     cue = subparsers.add_parser("cue", help="Advanced Cue Intelligence commands")
@@ -1190,7 +1190,7 @@ def _apple_audit(args: argparse.Namespace) -> int:
     return 0
 
 
-def _cuecifer_command(args: argparse.Namespace) -> int:
+def _similarity_command(args: argparse.Namespace) -> int:
     client = TaghagDbClient(read_database_config())
     if args.subcommand == "similar":
         generator = CrateGenerator(client)
@@ -1278,7 +1278,7 @@ def _cue_command(args: argparse.Namespace) -> int:
             return 1
             
     elif args.subcommand == "plan":
-        planner = ButterFlowPlanner(client)
+        planner = TransitionPlanner(client)
         try:
             states = planner.plan_sequence(args.seed, depth=args.depth)
             if not states:

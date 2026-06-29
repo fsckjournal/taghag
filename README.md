@@ -183,7 +183,7 @@ taghag-import import-batch \
 
 ## Apple Music Understanding analysis
 
-Taghag runs the local Cuecifer Swift analyzer over registered FLACs and stores
+Taghag runs the local apple-analyzer (Swift) over registered FLACs and stores
 Apple Music Understanding outputs as deterministic analysis data. The raw
 analyzer JSON is kept in `apple_analysis_runs`, normalized global curves land in
 `apple_track_analysis`, scalar features land in `apple_derived_features`, and
@@ -214,9 +214,9 @@ taghag-import apple-audit \
 The report flags large Apple-vs-`dj_tag` BPM deltas, low Apple/MIK BPM
 agreement scores, and unstable Apple keys.
 
-## Cuecifer engine and sync tools
+## Similarity engine and sync tools
 
-The Cuecifer engine can store legacy `sonic7_v1` vectors from `track_analysis`
+The similarity engine can store legacy `sonic7_v1` vectors from `track_analysis`
 and `dj_tag`, plus deterministic Apple `apple_hybrid_v1` vectors from
 `apple_derived_features`. Butter Flow path planning still falls back to the
 legacy cue/vector model, but when Apple-derived features exist it adds
@@ -227,13 +227,13 @@ Run it from `tools/` with the owner-scoped database env vars:
 
 ```bash
 cd tools
-python cuecifer/sonic_discovery.py recompute-all
-python cuecifer/sonic_discovery.py similar --path /absolute/path/to/track.flac --limit 10
-python cuecifer/crates.py --seed /absolute/path/to/track.flac --limit 30 --out-dir ../artifacts/crates
-python cuecifer/map.py --out-dir ../artifacts/cuecifer_map
-python cuecifer/human_correction.py apply --music-dir /Volumes/LOSSY/taghag/flacs --execute
-python cuecifer/human_correction.py audit --out ../artifacts/manual_review_needed.csv
-python cuecifer/sync_vibes.py --execute
+python similarity/sonic_discovery.py recompute-all
+python similarity/sonic_discovery.py similar --path /absolute/path/to/track.flac --limit 10
+python similarity/crates.py --seed /absolute/path/to/track.flac --limit 30 --out-dir ../artifacts/crates
+python similarity/map.py --out-dir ../artifacts/similarity_map
+python similarity/human_correction.py apply --music-dir /Volumes/LOSSY/taghag/flacs --execute
+python similarity/human_correction.py audit --out ../artifacts/manual_review_needed.csv
+python similarity/sync_vibes.py --execute
 ```
 
 `human_correction.py` upserts pinned rows into `track_curation`, and

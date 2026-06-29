@@ -38,6 +38,12 @@ OFFTRACK_TITLES = {
     "bessie", "smoothin groovin", "neu tech",
 }
 
+# Tracks confirmed un-griddable via Beatport iWebDJ (download-only / not streamable, so the
+# DJ app never generates a grid). Reason recorded so it's not mistaken for a transient miss.
+KNOWN_UNGRIDDABLE = {
+    "22806782": "download_only_not_streamable",  # Falling Down (Jonathan Kaspar 'Midnight' Remix)
+}
+
 def norm(s: str) -> str:
     s = s.lower()
     s = re.sub(r"\s*[\(\[-].*$", "", s)          # drop "- Extended Mix", "(Remix)", etc.
@@ -77,8 +83,11 @@ def main() -> int:
             rec["decode_ok"] = False; rec["needs_grid"] = "no_payload_in_fixture"
             bad.append(rec); tracks.append(rec); continue
         if "notfound" in raw.strip().strip('"').lower():
-            # Beatport had no iWebDJ analysis for this trackId at capture time.
-            rec["decode_ok"] = False; rec["needs_grid"] = "beatport_notfound"
+            # Beatport returns notfound. For DOWNLOAD-ONLY (non-streamable) tracks this is
+            # permanent: the DJ web app can't play them, so no server-side grid is ever
+            # generated. Those need offtrack-TFLite or MusicUnderstanding on the local file.
+            rec["decode_ok"] = False
+            rec["needs_grid"] = KNOWN_UNGRIDDABLE.get(tid, "beatport_notfound")
             bad.append(rec); tracks.append(rec); continue
         try:
             d = resolver.decode_iwebdj_payload(parse_payload(raw))

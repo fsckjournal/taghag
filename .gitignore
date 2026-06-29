@@ -72,3 +72,6 @@ THE_MASTER_RECORD.md
 # Committed sample input set for the mixer (intentional binaries — see its README)
 !tools/mixslice/samples/
 !tools/mixslice/samples/**
+
+# Root-level debug/plot artifacts (matplotlib output, pasted screenshots)
+/*.png

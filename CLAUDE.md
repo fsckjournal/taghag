@@ -215,6 +215,7 @@ taghag-import provider-evidence \
 ## Important Files & Docs
 
 - **[docs/GLOSSARY.md](docs/GLOSSARY.md)** — Canonical vocabulary: every term/tool/stage. Read first; it overrides older docs.
+- **[docs/architecture/slut_hag_split.md](docs/architecture/slut_hag_split.md)** — How Tagslut/Taghag split responsibility + data-layer invariants (FLAC-only, metadata-only, migrations-only, manual intake). Read before schema/pipeline changes.
 - **[README.md](README.md)** — High-level overview (update this if scope changes)
 - **[AGENT.md](AGENT.md)** — Agent workspace rules (clean-room, FLAC-native)
 - **[docs/architecture/roon_extension_architecture.md](docs/architecture/roon_extension_architecture.md)** — System philosophy, two-layer design

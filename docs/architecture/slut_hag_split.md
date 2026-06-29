@@ -138,6 +138,37 @@ Slut refs (committed on `slut` dev): `docs/audit/2026-06-29-db-library-audit-and
    FLAC Vorbis `comment` tags, **default to dry-run**, require explicit `--execute`. Nothing
    auto-writes. Near-duplicates (dedupe later); misnamed ("ID3"/"MP3" → they write FLAC).
 
+## Cross-session resolutions, part 2 (2026-06-29)
+
+Settled with the slut session; supersedes Open-decision #4 (grid ownership):
+
+- **Feature authorities (locked):** BPM ← **Rekordbox**, ENERGY ← **MIK**, KEY ← **MIK**.
+  Apple-analyzer is **complementary** (segment in/out points + BPM/key cross-check via
+  `bpm_agreement_score`), never the owner. **Essentia is obsolete** (apple-analyzer covers MIR
+  natively). This is the concrete form of MusicUnderstanding's "french exit" — it stays as a
+  cross-check, not a source of record.
+- **Coverage reality:** slut's `rekordbox_track_map` is 59% unmatched and all `location_url`s
+  point at OLD libs (`/Volumes/STILL`, `MP3_LIBRARY`), **none at the FLAC MASTER_LIBRARY**. So
+  `canonical_bpm`/`canonical_key` (94%/92%) are actually **Beatport/Lexicon-sourced**, not the
+  authorities; true Rekordbox/MIK coverage on FLAC is ≤~18%. **Action (slut-side):** reprocess
+  the DJ-relevant FLAC masters through Rekordbox (BPM) + MIK (energy/key) and **bind output to
+  content identity (sha256/ISRC)** — done once, survives re-layout.
+- **Grid source = a tagged seam, not a conflict.** `render_plan.json` carries `grid_source`.
+  **Beatport iWebDJ** is the *pragmatic* grid+mixpoint source (done now: THE dev playlist
+  10745489 is 171/172 gridded offline; uniquely gives phrase mix-in/out). The **locked
+  authorities** are the *durable, general* source once the reprocess lands. Until then, iWebDJ
+  and the slut DB's canonical values share Beatport provenance, so they're consistent.
+  **Rule:** prefer authority grids where present, fall back to iWebDJ. (Download-only tracks
+  like the 1 holdout can never be iWebDJ-gridded → authority/MU path only.)
+- **Live engine = LOCAL-only core** (reads SSD/local files, DSP local via look-ahead bake →
+  modest CPU OK). **Remote-control is a separable optional seam** (the control API) — only if
+  Georges wants to drive/hear the mix from another device. **Open (Georges's call):** add the
+  remote seam now or stay local-only. Jellyfin only ever a file/metadata source for that
+  optional case, never the mixer. Player choice stays deferred / agnostic.
+- **`tools/mixslice/build_identity_render_plan.py` is the live-path PRODUCER** (identity-keyed
+  tracks + per-track mix-in/out + compact linear grid; resolve→file at play time). Next build:
+  the per-transition spec layer (beatmatch params per consecutive pair).
+
 ## Scope note
 
 This split spans both repos and is recorded on both sides:

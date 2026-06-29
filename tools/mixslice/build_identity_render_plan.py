@@ -15,6 +15,7 @@ Usage:
 """
 import csv
 import json
+import os
 import re
 import sys
 from pathlib import Path
@@ -23,7 +24,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from taghag_import.beatport_resolver import BeatportResolver
 
 HERE = Path(__file__).resolve().parent
-FIXTURE = HERE.parent / "tests" / "fixtures" / "iwebdj_payloads.json"
+# Payload cache: env override (e.g. a live-refreshed cache), else the committed fixture.
+FIXTURE = Path(os.environ.get("IWEBDJ_PAYLOADS")
+               or HERE.parent / "tests" / "fixtures" / "iwebdj_payloads.json")
 
 # Offtrack/mixonset-cued tracks currently in Supabase are the *Paper Cuts* experiment set;
 # normalized titles listed here only so the builder can REPORT real overlap with this

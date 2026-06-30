@@ -28,3 +28,12 @@ Recent history mixes imperative summaries and Conventional Commit prefixes such 
 
 ## Security & Configuration Tips
 Taghag natively processes lossless FLAC files and is metadata-only: do not add logic that uploads or deletes local audio files. Keep server-side database credentials out of frontend code; only `VITE_` variables belong in `web/`. Put schema changes in `supabase/migrations/`, not ad hoc SQL notes.
+
+## Agent Restrictions
+> [!WARNING]
+> **RESTRICTED DIRECTORIES**
+> The following directories are strictly off-limits:
+> - `tools/brain_index/`
+> - `/Users/g/Projects/tag/archive_b/`
+> 
+> Agents must never read, write, index, or analyze any files within these directories. They are reserved for user-only access.

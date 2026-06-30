@@ -75,3 +75,4 @@ THE_MASTER_RECORD.md
 
 # Root-level debug/plot artifacts (matplotlib output, pasted screenshots)
 /*.png
+tools/brain_index

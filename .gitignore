@@ -75,3 +75,6 @@ THE_MASTER_RECORD.md
 
 # Root-level debug/plot artifacts (matplotlib output, pasted screenshots)
 /*.png
+
+# Echo Nest automix payload corpus — 22,808 files, ~27GB, derived cache, never commit
+automix_payloads/

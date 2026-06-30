@@ -14,7 +14,7 @@ from matplotlib.collections import LineCollection
 from matplotlib.figure import Figure
 from numpy.typing import ArrayLike, NDArray
 
-DEFAULT_AUDIO_FILE = Path("/Users/g/Desktop/transition_stretch.flac")
+DEFAULT_AUDIO_FILE = Path("/Users/g/Desktop/AB_autocue.flac")
 
 
 def reduce_waveform(

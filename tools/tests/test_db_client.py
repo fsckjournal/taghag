@@ -36,7 +36,7 @@ def test_upload_receipt_events_uses_canonical_tables(monkeypatch) -> None:
     client = TaghagDbClient(
         DatabaseConfig(
             supabase_url="https://example.supabase.co",
-            service_role_key="service-key",
+            secret_key="service-key",
             owner_user_id="00000000-0000-0000-0000-000000000001",
         )
     )
@@ -96,7 +96,7 @@ def test_upload_analysis_events_resolves_file_key_and_upserts_metadata(monkeypat
     client = TaghagDbClient(
         DatabaseConfig(
             supabase_url="https://example.supabase.co",
-            service_role_key="service-key",
+            secret_key="service-key",
             owner_user_id="00000000-0000-0000-0000-000000000001",
         )
     )

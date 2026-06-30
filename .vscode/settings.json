@@ -1,3 +1,14 @@
 {
-    "google.cloud.project": "geoooorges"
+    "python.defaultInterpreterPath": "/Users/g/Projects/tag/hag/.venv/bin/python",
+    "python.testing.unittestArgs": [
+        "-v",
+        "-s",
+        ".",
+        "-p",
+        "*_test.py"
+    ],
+    "python.testing.pytestEnabled": false,
+    "python.testing.unittestEnabled": true,
+    "python-envs.defaultEnvManager": "ms-python.python:poetry",
+    "python-envs.defaultPackageManager": "ms-python.python:poetry"
 }

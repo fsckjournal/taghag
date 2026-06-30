@@ -34,8 +34,7 @@ class TaghagDbClient:
             method="POST",
             headers={
                 "Content-Type": "application/json",
-                "apikey": self._config.service_role_key,
-                "Authorization": f"Bearer {self._config.service_role_key}",
+                "apikey": self._config.secret_key,
                 "Prefer": f"resolution=merge-duplicates,return={prefer_return}",
                 "Accept-Profile": self._config.schema,
                 "Content-Profile": self._config.schema,
@@ -65,8 +64,7 @@ class TaghagDbClient:
             url,
             method="GET",
             headers={
-                "apikey": self._config.service_role_key,
-                "Authorization": f"Bearer {self._config.service_role_key}",
+                "apikey": self._config.secret_key,
                 "Accept-Profile": self._config.schema,
             },
         )
@@ -309,8 +307,7 @@ class TaghagDbClient:
             url,
             method="DELETE",
             headers={
-                "apikey": self._config.service_role_key,
-                "Authorization": f"Bearer {self._config.service_role_key}",
+                "apikey": self._config.secret_key,
                 "Content-Profile": self._config.schema,
             },
         )
@@ -331,8 +328,7 @@ class TaghagDbClient:
             method="PATCH",
             headers={
                 "Content-Type": "application/json",
-                "apikey": self._config.service_role_key,
-                "Authorization": f"Bearer {self._config.service_role_key}",
+                "apikey": self._config.secret_key,
                 "Content-Profile": self._config.schema,
             },
         )

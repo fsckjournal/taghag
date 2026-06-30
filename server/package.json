@@ -1,0 +1,19 @@
+{
+  "name": "taghag-server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Server-side Supabase handlers (RLS-scoped + admin) via @supabase/server. Holds the SECRET key — never bundled to the browser (that is web/).",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "node --env-file=../.env --watch index.js",
+    "start": "node --env-file=../.env index.js"
+  },
+  "dependencies": {
+    "@supabase/server": "^1.2.0",
+    "@supabase/supabase-js": "^2.0.0",
+    "@hono/node-server": "^1.13.0"
+  }
+}

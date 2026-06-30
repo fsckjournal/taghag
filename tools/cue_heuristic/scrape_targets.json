@@ -1,0 +1,62 @@
+{
+  "purpose": "Scrape these Echo Nest automix payloads to grow the cue-heuristic eval set from 2 -> up to 6 tracks.",
+  "destination": "hag:automix_payloads/<spotify_id>.json  (gitignored, same dir/format as the existing 22,808)",
+  "acceptance": "a payload is valid if json has keys [meta,track,bars,beats,sections,segments,tatums] and track.duration > last_cue_s",
+  "resolver_recipe": "Mixonset title+artist -> Spotify search -> track ID -> fetch Echo Nest automix payload by ID (same pipeline that built the 22,808). Disambiguate variants by duration > last_cue_s.",
+  "targets": [
+    {
+      "title": "The Moodymann (Original Mix) \u2014 2 Billion Beats",
+      "apple_song_id": "17605410350501559761",
+      "spotify_id": "1xfx4eL5trXY44NVYuI4iS",
+      "alt_spotify_ids": [
+        "35vXWZtzYSnqcscM4BcwsU",
+        "6d60cM4yd0Vag7Znog3VB2",
+        "2GsxSiDWBfkYTlumoxqCB9"
+      ],
+      "last_cue_s": 400.1,
+      "cues": 30,
+      "note": "top result is the Original; alts are Pete Herbert/Al Bradley remixes \u2014 pick the one whose duration > last_cue_s and closest to a no-suffix title"
+    },
+    {
+      "title": "Something Better (Original Mix) \u2014 Jamie L",
+      "apple_song_id": "6492942536811277373",
+      "spotify_id": "5MC0pNKUh7q5jrVKmtiJoe",
+      "alt_spotify_ids": [
+        "4emHMIYTTqFDwC1yWCXzpg"
+      ],
+      "last_cue_s": 411.9,
+      "cues": 25,
+      "note": "5MC0... is explicitly 'Original Mix'; 4emH... is the plain title (likely same recording, dur 418s both)"
+    },
+    {
+      "title": "Driving Me Crazy (Original Mix) \u2014 Neon Transmission",
+      "apple_song_id": "11105736477667307396",
+      "spotify_id": "6VVkGOpjnEVPSPqTrrrHX3",
+      "alt_spotify_ids": [
+        "75lcEdVWFoDLUBIQvG74Wk",
+        "0bpNccw2Vvu11ZZwmsM7X2"
+      ],
+      "last_cue_s": 309.2,
+      "cues": 23,
+      "note": "three IDs, all 313s \u2014 likely same recording across releases; any should match"
+    },
+    {
+      "title": "Steady Drummer (Original Mix) \u2014 Bachgenaur",
+      "apple_song_id": "10045684046879500484",
+      "spotify_id": null,
+      "alt_spotify_ids": [],
+      "last_cue_s": 377.3,
+      "cues": 18,
+      "note": "UNRESOLVED \u2014 Spotify search blocked on a classifier blip. Resolve: search 'Steady Drummer Bachgenaur', pick a Song with duration > last_cue_s"
+    }
+  ],
+  "no_spotify_release": [
+    {
+      "title": "Drifting (Original Mix) \u2014 Proviant Audio",
+      "apple_song_id": "5378182644041844890",
+      "spotify_id": null,
+      "note": "No Spotify release found under this artist. Treat as no_spotify_release \u2014 do NOT title-match (false-positive risk). Permanent eval miss unless sourced elsewhere."
+    }
+  ],
+  "after_scrape": "add each newly-present track to hag:tools/cue_heuristic/ground_truth.json verified_pairs (cues already extracted; ping hag to fold them in), then re-run eval.py"
+}

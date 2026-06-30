@@ -1,0 +1,308 @@
+{
+  "source": "mixonset_analysis_report.md (Mixonset TFLite cue cache) + automix_payloads/<spotify_id>.json (Echo Nest)",
+  "verified_pairs": [
+    {
+      "title": "Wildfires (Original Mix) \u2014 Mindchatter",
+      "spotify_id": "65HVJYKTgBtU0DtK69XEhM",
+      "payload": "automix_payloads/65HVJYKTgBtU0DtK69XEhM.json",
+      "cues": [
+        {
+          "t": 0.0,
+          "bpm": 130.0,
+          "energy": 0.2915,
+          "mix": 0.0
+        },
+        {
+          "t": 1.89,
+          "bpm": 130.0,
+          "energy": 0.2971,
+          "mix": -0.0056
+        },
+        {
+          "t": 9.27,
+          "bpm": 130.0,
+          "energy": 0.3112,
+          "mix": -0.0142
+        },
+        {
+          "t": 16.66,
+          "bpm": 130.0,
+          "energy": 0.3112,
+          "mix": -0.0
+        },
+        {
+          "t": 24.04,
+          "bpm": 130.0,
+          "energy": 0.3171,
+          "mix": -0.0059
+        },
+        {
+          "t": 31.43,
+          "bpm": 130.0,
+          "energy": 0.3127,
+          "mix": 0.0044
+        },
+        {
+          "t": 38.81,
+          "bpm": 130.0,
+          "energy": 0.3445,
+          "mix": -0.032
+        },
+        {
+          "t": 46.2,
+          "bpm": 130.0,
+          "energy": 0.3365,
+          "mix": 0.008
+        },
+        {
+          "t": 48.04,
+          "bpm": 130.0,
+          "energy": 0.3475,
+          "mix": -0.0109
+        },
+        {
+          "t": 62.81,
+          "bpm": 130.0,
+          "energy": 0.3923,
+          "mix": -0.0899
+        },
+        {
+          "t": 84.97,
+          "bpm": 130.0,
+          "energy": 0.3751,
+          "mix": 0.0518
+        },
+        {
+          "t": 114.5,
+          "bpm": 130.0,
+          "energy": 0.3397,
+          "mix": 0.1415
+        },
+        {
+          "t": 121.89,
+          "bpm": 130.0,
+          "energy": 0.3819,
+          "mix": -0.0425
+        },
+        {
+          "t": 144.04,
+          "bpm": 130.0,
+          "energy": 0.3933,
+          "mix": -0.0343
+        },
+        {
+          "t": 188.35,
+          "bpm": 130.0,
+          "energy": 0.3689,
+          "mix": 0.1467
+        },
+        {
+          "t": 203.12,
+          "bpm": 130.0,
+          "energy": 0.1854,
+          "mix": 0.3682
+        },
+        {
+          "t": 210.5,
+          "bpm": 130.0,
+          "energy": 0.0,
+          "mix": 0.1866
+        }
+      ]
+    },
+    {
+      "title": "Smoothin' Groovin' (Original Mix) \u2014 Crazy P",
+      "spotify_id": "6w0RXOpQYDCjnIQBETYURK",
+      "payload": "automix_payloads/6w0RXOpQYDCjnIQBETYURK.json",
+      "cues": [
+        {
+          "t": 0.0,
+          "bpm": 120.87,
+          "energy": 0.1871,
+          "mix": 0.0
+        },
+        {
+          "t": 0.56,
+          "bpm": 120.87,
+          "energy": 0.1767,
+          "mix": 0.0104
+        },
+        {
+          "t": 32.33,
+          "bpm": 120.87,
+          "energy": 0.178,
+          "mix": -0.005
+        },
+        {
+          "t": 48.21,
+          "bpm": 120.87,
+          "energy": 0.2111,
+          "mix": -0.0665
+        },
+        {
+          "t": 79.98,
+          "bpm": 120.87,
+          "energy": 0.2208,
+          "mix": -0.039
+        },
+        {
+          "t": 111.75,
+          "bpm": 120.87,
+          "energy": 0.1899,
+          "mix": 0.124
+        },
+        {
+          "t": 127.63,
+          "bpm": 120.87,
+          "energy": 0.2204,
+          "mix": -0.0611
+        },
+        {
+          "t": 143.52,
+          "bpm": 120.87,
+          "energy": 0.2404,
+          "mix": -0.0402
+        },
+        {
+          "t": 151.46,
+          "bpm": 120.87,
+          "energy": 0.2343,
+          "mix": 0.0061
+        },
+        {
+          "t": 167.34,
+          "bpm": 120.87,
+          "energy": 0.2558,
+          "mix": -0.0431
+        },
+        {
+          "t": 175.29,
+          "bpm": 120.87,
+          "energy": 0.1806,
+          "mix": 0.0756
+        },
+        {
+          "t": 183.23,
+          "bpm": 120.87,
+          "energy": 0.197,
+          "mix": -0.0165
+        },
+        {
+          "t": 191.17,
+          "bpm": 120.87,
+          "energy": 0.2474,
+          "mix": -0.0506
+        },
+        {
+          "t": 191.66,
+          "bpm": 120.87,
+          "energy": 0.1617,
+          "mix": 0.0857
+        },
+        {
+          "t": 207.54,
+          "bpm": 120.87,
+          "energy": 0.1606,
+          "mix": 0.0021
+        },
+        {
+          "t": 223.43,
+          "bpm": 120.87,
+          "energy": 0.2384,
+          "mix": -0.156
+        },
+        {
+          "t": 239.31,
+          "bpm": 120.87,
+          "energy": 0.2695,
+          "mix": -0.0624
+        },
+        {
+          "t": 247.26,
+          "bpm": 120.87,
+          "energy": 0.2541,
+          "mix": 0.0155
+        },
+        {
+          "t": 279.03,
+          "bpm": 120.87,
+          "energy": 0.2715,
+          "mix": -0.0696
+        },
+        {
+          "t": 286.97,
+          "bpm": 120.87,
+          "energy": 0.0859,
+          "mix": 0.1867
+        },
+        {
+          "t": 294.91,
+          "bpm": 120.87,
+          "energy": 0.0794,
+          "mix": 0.0066
+        },
+        {
+          "t": 302.85,
+          "bpm": 120.87,
+          "energy": 0.1281,
+          "mix": -0.049
+        },
+        {
+          "t": 310.79,
+          "bpm": 120.87,
+          "energy": 0.1326,
+          "mix": -0.0046
+        },
+        {
+          "t": 318.73,
+          "bpm": 120.87,
+          "energy": 0.1701,
+          "mix": -0.0377
+        },
+        {
+          "t": 326.67,
+          "bpm": 120.87,
+          "energy": 0.1825,
+          "mix": -0.0125
+        },
+        {
+          "t": 334.62,
+          "bpm": 120.87,
+          "energy": 0.2717,
+          "mix": -0.0897
+        },
+        {
+          "t": 398.15,
+          "bpm": 120.87,
+          "energy": 0.2427,
+          "mix": 0.2318
+        },
+        {
+          "t": 445.81,
+          "bpm": 120.87,
+          "energy": 0.0558,
+          "mix": 1.1226
+        },
+        {
+          "t": 461.69,
+          "bpm": 120.87,
+          "energy": 0.1118,
+          "mix": -0.1124
+        },
+        {
+          "t": 477.58,
+          "bpm": 120.87,
+          "energy": 0.1549,
+          "mix": -0.0864
+        }
+      ]
+    }
+  ],
+  "pending_need_payload_scrape": {
+    "The Moodymann (Original Mix) \u2014 2 Billion Beats": "1xfx4eL5trXY44NVYuI4iS",
+    "Something Better (Original Mix) \u2014 Jamie L": "5MC0pNKUh7q5jrVKmtiJoe",
+    "Driving Me Crazy (Original Mix) \u2014 Neon Transmission": "6VVkGOpjnEVPSPqTrrrHX3",
+    "Steady Drummer (Original Mix) \u2014 Bachgenaur": null,
+    "Drifting (Original Mix) \u2014 Proviant Audio": null
+  }
+}

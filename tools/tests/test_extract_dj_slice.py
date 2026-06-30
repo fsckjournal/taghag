@@ -315,7 +315,7 @@ def test_extract_dj_slice_groups_by_isrc_and_injects_owner_id(tmp_path: Path, mo
         sqlite_db,
         config=DatabaseConfig(
             supabase_url="https://example.supabase.co",
-            service_role_key="service-key",
+            secret_key="service-key",
             database_url="postgresql://example",
             owner_user_id="00000000-0000-0000-0000-000000000001",
         ),
@@ -356,7 +356,7 @@ def test_extract_dj_slice_requires_ro_sqlite(tmp_path: Path) -> None:
             tmp_path / "missing.db",
             config=DatabaseConfig(
                 supabase_url="https://example.supabase.co",
-                service_role_key="service-key",
+                secret_key="service-key",
                 database_url="postgresql://example",
                 owner_user_id="00000000-0000-0000-0000-000000000001",
             ),

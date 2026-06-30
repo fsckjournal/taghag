@@ -106,6 +106,7 @@ def _apply_resolved_evidence(dj_tag: dict[str, object], resolved: ResolvedTags) 
         "catalog_number": resolved.catalog_number or None,
         "release_date": _pad_release_date(resolved.release_date),
         "isrc": resolved.isrc or None,
+        "spotify_id": resolved.spotify_id or None,
     }
     if resolved.year.isdigit():
         overlays["year"] = int(resolved.year)
@@ -130,6 +131,8 @@ def _build_import_batch_records(
     run_name: str | None = None,
     postman_evidence: str | None = None,
     unsafe_title_artist_evidence_match: bool = False,
+    spotify_token: str | None = None,
+    automix_cache: str | None = None,
 ) -> list[dict[str, object]]:
     root_path = Path(root).expanduser().resolve()
     found, skipped = discover_audio_files(root_path)
@@ -244,6 +247,7 @@ def _build_import_batch_records(
             "canonical_genre": canonical.get("canonical_genre"),
             "canonical_subgenre": canonical.get("canonical_subgenre"),
             "isrc": tags.get("isrc"),
+            "spotify_id": tags.get("spotify_id"),
             "compilation": tags.get("compilation"),
             "rating": tags.get("rating"),
             "energy": tags.get("energy"),
@@ -340,6 +344,56 @@ def _build_import_batch_records(
             seen.add(raw_key)
             records.append(event("tag_evidence", run_id=run_id, file_key=file_key, tag_evidence=row))
 
+    if spotify_token or automix_cache:
+        try:
+            from .automix import AutomixEngine
+            
+            observed_events = [r for r in records if r["event_type"] == "audio_observed"]
+            
+            def get_track_num(r):
+                try:
+                    return float(r["dj_tag"].get("track_number") or 0)
+                except ValueError:
+                    return 0.0
+                    
+            sorted_events = sorted(observed_events, key=lambda r: (get_track_num(r), r["dj_tag"].get("title", "")))
+
+            for i in range(len(sorted_events) - 1):
+                event_a = sorted_events[i]
+                event_b = sorted_events[i + 1]
+                
+                tag_a = event_a["dj_tag"]
+                tag_b = event_b["dj_tag"]
+                
+                spotify_id_a = tag_a.get("spotify_id")
+                spotify_id_b = tag_b.get("spotify_id")
+                
+                if spotify_id_a and spotify_id_b:
+                    try:
+                        if automix_cache:
+                            analysis_a = AutomixEngine.fetch_local_analysis(spotify_id_a, automix_cache)
+                            analysis_b = AutomixEngine.fetch_local_analysis(spotify_id_b, automix_cache)
+                        else:
+                            analysis_a = AutomixEngine.fetch_audio_analysis(spotify_id_a, spotify_token)
+                            analysis_b = AutomixEngine.fetch_audio_analysis(spotify_id_b, spotify_token)
+                        engine = AutomixEngine(analysis_a, analysis_b)
+                        transition = engine.compute_transition()
+                        
+                        tag_a["automix_outro"] = {
+                            "start_point": transition["track_a"]["start_point"],
+                            "end_point": transition["track_a"]["end_point"],
+                            "fade_curve": transition["track_a"]["fade_curve"],
+                        }
+                        tag_b["automix_intro"] = {
+                            "start_point": transition["track_b"]["start_point"],
+                            "end_point": transition["track_b"]["end_point"],
+                            "fade_curve": transition["track_b"]["fade_curve"],
+                        }
+                    except Exception as e:
+                        print(f"Automix computation failed for {spotify_id_a} -> {spotify_id_b}: {e}")
+        except ImportError:
+            print("Warning: automix module not found. Skipping DJ transitions.")
+
     records.append(
         event(
             "import_run_summary",
@@ -356,11 +410,14 @@ def _build_import_batch_records(
 
 
 def _import_batch(args: argparse.Namespace) -> int:
+    spotify_token = args.spotify_token or os.environ.get("TAGHAG_SPOTIFY_TOKEN")
     records = _build_import_batch_records(
         args.root,
         run_name=args.run_name,
         postman_evidence=args.postman_evidence,
         unsafe_title_artist_evidence_match=args.unsafe_title_artist_evidence_match,
+        spotify_token=spotify_token,
+        automix_cache=args.automix_cache,
     )
     run_id = str(records[0]["run_id"])
     receipt_path = receipt_path_for_run(args.receipt_dir, run_id)
@@ -768,6 +825,8 @@ def build_parser() -> argparse.ArgumentParser:
         help="Allow experimental title/artist evidence matching when ISRC is missing",
     )
     import_batch.add_argument("--verbose", action="store_true", help="Print extra progress")
+    import_batch.add_argument("--spotify-token", help="Optional Spotify access token to fetch DJ automix transition data.")
+    import_batch.add_argument("--automix-cache", help="Path to local directory of Spotify automix analysis JSON files.")
     import_batch.set_defaults(func=_import_batch)
 
     scan = subparsers.add_parser("scan", help="Compatibility wrapper: scan and write a JSONL receipt")
@@ -1008,7 +1067,6 @@ def build_parser() -> argparse.ArgumentParser:
     cue_import.add_argument("--anlz-dir", required=True, help="Directory containing ANLZ files")
     cue_import.add_argument("--track-id", required=True, help="Database audio_file ID for the track")
 
-    cue_mixonset = cue_sub.add_parser("import-mixonset", help="Import Mixonset/Offtrack decrypted cues and segments")
     cue_mixonset.add_argument("--appstatus", default="/Users/g/Library/Containers/8AE1006C-43C9-49F1-ABE5-1E83BBE749C7/Data/Documents/appstatus.txt", help="Path to appstatus.txt")
     cue_mixonset.add_argument("--docs-dir", default="/Users/g/Library/Containers/8AE1006C-43C9-49F1-ABE5-1E83BBE749C7/Data/Documents", help="Path to Documents sandbox directory")
     cue_mixonset.add_argument("--dry-run", action="store_true", help="Print summary without inserting into database")

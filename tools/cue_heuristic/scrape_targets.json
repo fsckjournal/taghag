@@ -43,11 +43,11 @@
     {
       "title": "Steady Drummer (Original Mix) \u2014 Bachgenaur",
       "apple_song_id": "10045684046879500484",
-      "spotify_id": null,
+      "spotify_id": "6HSQVzeB7kjoeEkrTwLCSY",
       "alt_spotify_ids": [],
       "last_cue_s": 377.3,
       "cues": 18,
-      "note": "UNRESOLVED \u2014 Spotify search blocked on a classifier blip. Resolve: search 'Steady Drummer Bachgenaur', pick a Song with duration > last_cue_s"
+      "note": "Resolved 2026-07-01: 6HSQVzeB7kjoeEkrTwLCSY, duration 384s > last_cue 377.3s (validated)."
     }
   ],
   "no_spotify_release": [

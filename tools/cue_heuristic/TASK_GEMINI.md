@@ -17,8 +17,8 @@ corpus — you know the signal better than we can infer it.
 ### 1. Grow the eval set (biggest leverage — only you can scrape)
 - Run `scrape_targets.json`: fetch the 4 missing cue-bearing payloads into
   `hag:automix_payloads/<spotify_id>.json` (same pipeline/format as the existing 22,808).
-- First resolve **Steady Drummer — Bachgenaur** (`apple_song_id 10045684046879500484`) to a
-  Spotify ID — our search hit a classifier blip. Disambiguate variants by
+- All 4 targets now have resolved Spotify IDs (Steady Drummer → `6HSQVzeB7kjoeEkrTwLCSY`,
+  duration-validated). Just scrape them; disambiguate any remaining variants by
   `track.duration > last_cue_s`.
 - For each newly-scraped track, extract its cue table from `mixonset_analysis_report.md`
   (you have it — `/Users/g/Documents/taghag/docs/archive/mixonset_analysis_report.md`) and add

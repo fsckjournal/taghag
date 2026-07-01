@@ -82,3 +82,5 @@ automix_payloads/
 # spotify_id<->ISRC bridge outputs — regenerable via build_spotify_isrc_bridge.py
 tools/cue_heuristic/spotify_isrc_bridge.jsonl
 tools/cue_heuristic/track_alias_spotify_id.sql
+tools/cue_heuristic/fetch_candidates.jsonl
+tools/cue_heuristic/fetch_gap_isrcs.txt

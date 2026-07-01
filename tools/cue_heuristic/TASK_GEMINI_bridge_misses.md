@@ -41,3 +41,31 @@ secondary match (e.g. by title+artist fuzzy join).
 
 **Do NOT** write to `music_v4.db` — Taghag is read-only on Tagslut. The bridge's
 only output is `track_alias_spotify_id.sql`, handed to the slut side to ingest.
+
+---
+
+## Bigger win: grow the payload corpus (6,806 uncovered library tracks)
+
+Beyond fixing the two gaps above, there are **6,806 v4 tracks that have an ISRC but
+no Echo Nest payload yet** — the real expansion pool. Both lists are pre-generated
+(regenerable, gitignored) in `tools/cue_heuristic/`:
+
+- `fetch_gap_isrcs.txt` — all 6,806 ISRCs, one per line.
+- `fetch_candidates.jsonl` — the **4,528** of them already resolved to a spotify_id
+  offline from the parquet dump (so they skip the rate-limited ISRC→search step).
+
+**Fetch them** (needs the live librespot Spotify Connect session — open the Spotify
+Mac app → Devices when the script broadcasts). `fetch_automix_payloads.py` now takes
+either input and auto-skips anything already downloaded (resumable):
+
+```
+# Fast path: 4,528 pre-resolved ids (no search calls)
+python3 tools/fetch_automix_payloads.py tools/cue_heuristic/fetch_candidates.jsonl --out automix_payloads
+# Remainder: 2,278 not in the dump, resolved via live search
+python3 tools/fetch_automix_payloads.py tools/cue_heuristic/fetch_gap_isrcs.txt --out automix_payloads
+```
+
+Then re-run `build_spotify_isrc_bridge.py resolve-parquet` + `join` to fold the new
+payloads into `track_alias_spotify_id.sql`. Regenerate the gap lists afterward to
+confirm the pool shrank.
+

@@ -78,3 +78,7 @@ THE_MASTER_RECORD.md
 
 # Echo Nest automix payload corpus — 22,808 files, ~27GB, derived cache, never commit
 automix_payloads/
+
+# spotify_id<->ISRC bridge outputs — regenerable via build_spotify_isrc_bridge.py
+tools/cue_heuristic/spotify_isrc_bridge.jsonl
+tools/cue_heuristic/track_alias_spotify_id.sql
